@@ -277,6 +277,8 @@ export interface AmazonPlannerSessionStyleImage {
   imageId: string
 }
 
+export type AmazonStyleDensityMode = 'rich' | 'minimal'
+
 export interface AmazonPlannerSession {
   id: string
   title: string
@@ -293,6 +295,7 @@ export interface AmazonPlannerSession {
   styleCandidates: AmazonPlannerSessionStyleCandidate[]
   styleImages: AmazonPlannerSessionStyleImage[]
   selectedStyleIndex: number | null
+  styleDensityMode?: AmazonStyleDensityMode
   imagePlans: AmazonPlannerSessionImagePlan[]
   aPlusPlans: AmazonPlannerSessionAPlusPlan[]
   selectedPlanIndex: number | null

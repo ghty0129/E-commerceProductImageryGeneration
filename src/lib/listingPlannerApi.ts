@@ -500,6 +500,8 @@ function buildListingPlannerInstructions(baseDraft: AmazonPromptDraft) {
     'Use the Amazon reference material below to improve compliance judgment. It is not a fixed slot-by-slot framework, and it must not replace the product facts from the listing and reference images.',
     formatAmazonListingReferenceMaterial(),
     'For each slot, write planMarkdown in Simplified Chinese as a detailed agent-style plan similar to a ChatGPT web response, then write a professional English image prompt and English negative prompt.',
+    'Each image prompt should fully plan the finished Amazon image: composition, product evidence, on-image US-English copy when useful, callouts or information areas when useful, visual hierarchy, and rendering style.',
+    'For secondary information images, prefer complete information design with clear hierarchy and useful product evidence; lifestyle or beauty slots should still have purposeful composition and visible product support.',
     'Return one seriesStyleGuide string in English that can keep separately generated images visually coherent.',
     'Return exactly 3 styleCandidates for low-resolution visual style reference board generation. Each candidate should represent a distinct coherent visual style choice for this same product, not a finished Amazon listing image.',
     'For each styleCandidates.prompt, describe a 1024x1024 visual style reference board with visible typography samples, color palette swatches, lighting/material samples, background/material texture samples, product-finish detail samples, and icon/callout treatment.',
@@ -532,6 +534,8 @@ function buildAPlusPlannerInstructions(baseDraft: AmazonPromptDraft, aPlusType: 
     'Use the Amazon A+ reference material below to improve compliance judgment. It is not a fixed module creative framework, and it must not replace the product facts from the listing and reference images.',
     formatAmazonAPlusReferenceMaterial(),
     'For each module, write planMarkdown in Simplified Chinese as a detailed agent-style plan similar to a ChatGPT web response, then write a professional English image prompt and English negative prompt.',
+    'Each module prompt should fully plan the finished Amazon image: composition, product evidence, on-image US-English copy when useful, callouts or information areas when useful, visual hierarchy, and rendering style.',
+    'For A+ information modules, prefer complete information design with clear hierarchy and useful product evidence; lifestyle or brand modules should still have purposeful composition and visible product support.',
     'Return one seriesStyleGuide string in English that can keep separately generated modules visually coherent.',
     'Return exactly 3 styleCandidates for low-resolution visual style reference board generation. Each candidate should represent a distinct coherent visual style choice for this same product and A+ set, not a finished Amazon A+ module.',
     'For each styleCandidates.prompt, describe a 1024x1024 visual style reference board with visible typography samples, color palette swatches, lighting/material samples, background/material texture samples, product-finish detail samples, and icon/callout treatment.',
@@ -640,6 +644,7 @@ export async function callAmazonPlannerApi(options: {
   mode?: AmazonPlannerMode
   aPlusType?: APlusContentType
   aPlusGenerationTier?: SizeTier
+  signal?: AbortSignal
 }): Promise<PlannerApiResult> {
   const model = options.model?.trim() || options.profile.model.trim() || (options.profile.apiMode === 'chat' ? DEFAULT_CHAT_MODEL : DEFAULT_RESPONSES_MODEL)
   const mode = options.mode ?? 'listing'
@@ -657,6 +662,7 @@ export async function callAmazonPlannerApi(options: {
       : buildApiUrl(options.profile.baseUrl, 'responses', proxyConfig, useApiProxy),
     {
     method: 'POST',
+    signal: options.signal,
     headers: {
       Authorization: `Bearer ${options.profile.apiKey}`,
       'Content-Type': 'application/json',

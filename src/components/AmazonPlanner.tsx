@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { addImageFromFile, ensureImageCached, submitTask, useStore } from '../store'
 import { getActiveApiProfile, getAmazonPlannerProfile, normalizeSettings, validateApiProfile } from '../lib/apiProfiles'
 import {
@@ -16,6 +16,7 @@ import {
   getAPlusModuleGenerationSize,
   getAPlusModuleSpecs,
   getAPlusModuleUploadSize,
+  isAmazonListingMainSlot,
   isAPlusTextModule,
   withAPlusGenerationSizes,
   type APlusContentType,
@@ -23,6 +24,7 @@ import {
   type AmazonImagePlan,
   type AmazonPlannerMode,
   type AmazonStyleCandidate,
+  type AmazonStyleDensityMode,
 } from '../lib/listingPlanner'
 import { callAmazonPlannerApi, type PlannerApiResult } from '../lib/listingPlannerApi'
 import { callImageApi } from '../lib/api'
@@ -30,12 +32,19 @@ import { deleteAmazonPlannerSession, getAllAmazonPlannerSessions, putAmazonPlann
 import { normalizeParamsForSettings } from '../lib/paramCompatibility'
 import { DEFAULT_PARAMS } from '../types'
 import type { AmazonPlannerSession } from '../types'
-import { ChevronLeftIcon, ChevronRightIcon, CopyIcon, HistoryIcon, PhotoIcon, PlusIcon, TrashIcon } from './icons'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, TrashIcon } from './icons'
 
 const FIELD_CLASS = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
 const LABEL_CLASS = 'mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400'
 const PLAN_LIST_CLASS = 'grid max-h-[420px] gap-2 overflow-y-auto overscroll-contain pr-1 custom-scrollbar sm:max-h-[480px]'
 const API_MAX_IMAGES = 16
+const STYLE_PREVIEW_WIDTH = 420
+const STYLE_PREVIEW_HEIGHT = 500
+const STYLE_PREVIEW_OFFSET = 16
+const STYLE_DENSITY_OPTIONS: Array<{ value: AmazonStyleDensityMode; label: string }> = [
+  { value: 'rich', label: '信息丰富' },
+  { value: 'minimal', label: '简约' },
+]
 type ComplianceStatus = 'ready' | 'warning' | 'missing'
 type WorkflowStepStatus = 'done' | 'current' | 'todo'
 type StyleImageState = {
@@ -44,6 +53,13 @@ type StyleImageState = {
   imageId?: string
   dataUrl?: string
   error?: string
+}
+type StylePreviewState = {
+  dataUrl: string
+  label: string
+  description: string
+  left: number
+  top: number
 }
 const PLANNER_HISTORY_LIMIT = 30
 
@@ -150,6 +166,25 @@ function updateDraft<K extends keyof AmazonPromptDraft>(
   return { ...draft, [key]: value }
 }
 
+function isAbortError(err: unknown): boolean {
+  return (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError') ||
+    (err instanceof Error && err.name === 'AbortError')
+}
+
+function getStylePreviewPosition(clientX: number, clientY: number) {
+  if (typeof window === 'undefined') {
+    return { left: clientX + STYLE_PREVIEW_OFFSET, top: clientY + STYLE_PREVIEW_OFFSET }
+  }
+  const viewportPadding = 12
+  const rightLeft = clientX + STYLE_PREVIEW_OFFSET
+  const left = rightLeft + STYLE_PREVIEW_WIDTH <= window.innerWidth - viewportPadding
+    ? rightLeft
+    : Math.max(viewportPadding, clientX - STYLE_PREVIEW_WIDTH - STYLE_PREVIEW_OFFSET)
+  const maxTop = Math.max(viewportPadding, window.innerHeight - STYLE_PREVIEW_HEIGHT - viewportPadding)
+  const top = Math.min(Math.max(viewportPadding, clientY - 160), maxTop)
+  return { left, top }
+}
+
 function getPlanSummary(planMarkdown: string) {
   const lines = planMarkdown
     .split(/\r?\n/)
@@ -199,6 +234,7 @@ function getAmazonListingPlannerChecks(
   size: string,
   referenceImageCount: number,
   hasStyleReference: boolean,
+  styleReferenceRequired: boolean,
 ): Array<{ label: string; status: ComplianceStatus; detail: string }> {
   return [
     {
@@ -218,8 +254,10 @@ function getAmazonListingPlannerChecks(
     },
     {
       label: '风格板',
-      status: hasStyleReference ? 'ready' : 'warning',
-      detail: hasStyleReference ? '已选择隐藏风格参考' : '正式生成前请选择风格',
+      status: !styleReferenceRequired || hasStyleReference ? 'ready' : 'warning',
+      detail: !styleReferenceRequired
+        ? 'MAIN 主图不使用隐藏风格参考'
+        : hasStyleReference ? '已选择隐藏风格参考' : '正式生成前请选择风格',
     },
   ]
 }
@@ -236,9 +274,11 @@ export default function AmazonPlanner() {
   const removeInputImage = useStore((s) => s.removeInputImage)
   const clearInputImages = useStore((s) => s.clearInputImages)
   const setInputImages = useStore((s) => s.setInputImages)
+  const setLightboxImageId = useStore((s) => s.setLightboxImageId)
   const showToast = useStore((s) => s.showToast)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  const plannerAbortControllerRef = useRef<AbortController | null>(null)
   const [draft, setDraft] = useState<AmazonPromptDraft>(DEFAULT_AMAZON_PROMPT_DRAFT)
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k')
   const [plannerMode, setPlannerMode] = useState<AmazonPlannerMode>('listing')
@@ -253,6 +293,8 @@ export default function AmazonPlanner() {
   const [styleCandidates, setStyleCandidates] = useState<AmazonStyleCandidate[]>([])
   const [styleImages, setStyleImages] = useState<StyleImageState[]>([])
   const [selectedStyleIndex, setSelectedStyleIndex] = useState<number | null>(null)
+  const [styleDensityMode, setStyleDensityMode] = useState<AmazonStyleDensityMode>('rich')
+  const [stylePreview, setStylePreview] = useState<StylePreviewState | null>(null)
   const [isGeneratingStyleImages, setIsGeneratingStyleImages] = useState(false)
   const [styleError, setStyleError] = useState('')
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number | null>(null)
@@ -270,13 +312,22 @@ export default function AmazonPlanner() {
   const selectedAPlusText = selectedAPlusPlan ? formatAPlusModuleText(selectedAPlusPlan) : ''
   const selectedStyleImage = selectedStyleIndex == null ? null : styleImages.find((image) => image.candidateIndex === selectedStyleIndex && image.status === 'done') ?? null
   const selectedStyleCandidate = selectedStyleIndex == null ? null : styleCandidates[selectedStyleIndex] ?? null
+  const styleLightboxImageIds = useMemo(() => styleImages.flatMap((image) => image.status === 'done' && image.imageId ? [image.imageId] : []), [styleImages])
   const activeSeriesStyleGuide = plannerMode === 'aplus' ? seriesStyleGuides.aplus : seriesStyleGuides.listing
+  const isMainListingPlan = plannerMode === 'listing' && isAmazonListingMainSlot(selectedPlan?.slot)
+  const styleReferenceRequired = !isMainListingPlan
   const hasStyleReference = Boolean(selectedStyleImage?.imageId)
-  const effectiveReferenceCount = inputImages.length + (selectedStyleImage?.imageId && !inputImages.some((image) => image.id === selectedStyleImage.imageId) ? 1 : 0)
-  const styleReferenceLimitExceeded = effectiveReferenceCount > API_MAX_IMAGES
+  const usesStyleReferenceForActivePlan = styleReferenceRequired && hasStyleReference
+  const effectiveReferenceCount = inputImages.length + (usesStyleReferenceForActivePlan && selectedStyleImage?.imageId && !inputImages.some((image) => image.id === selectedStyleImage.imageId) ? 1 : 0)
+  const styleReferenceLimitExceeded = usesStyleReferenceForActivePlan && effectiveReferenceCount > API_MAX_IMAGES
   const activePrompt = plannerMode === 'aplus'
-    ? selectedAPlusPlan ? buildAmazonAPlusPlanPrompt({ ...selectedAPlusPlan, seriesStyleGuide: activeSeriesStyleGuide, styleReferenceAttached: hasStyleReference }) : ''
-    : selectedPlan ? buildAmazonPlanPrompt({ ...selectedPlan, seriesStyleGuide: activeSeriesStyleGuide, styleReferenceAttached: hasStyleReference }) : ''
+    ? selectedAPlusPlan ? buildAmazonAPlusPlanPrompt({ ...selectedAPlusPlan, seriesStyleGuide: activeSeriesStyleGuide, styleReferenceAttached: usesStyleReferenceForActivePlan, styleDensityMode }) : ''
+    : selectedPlan ? buildAmazonPlanPrompt({
+      ...selectedPlan,
+      seriesStyleGuide: isMainListingPlan ? null : activeSeriesStyleGuide,
+      styleReferenceAttached: usesStyleReferenceForActivePlan,
+      styleDensityMode,
+    }) : ''
   const activePlanMarkdown = plannerMode === 'aplus' ? selectedAPlusPlan?.planMarkdown ?? '' : selectedPlan?.planMarkdown ?? ''
   const activePlanPreview = activePlanMarkdown
     ? [
@@ -298,7 +349,7 @@ export default function AmazonPlanner() {
   const actionLabel = plannerMode === 'aplus' ? selectedAPlusPlan?.label : selectedPlan?.label
   const showStickyActions = plannerMode === 'aplus' ? aPlusPlansWithSizes.length > 0 : imagePlans.length > 0
   const actionDisabled = plannerMode === 'aplus' ? !selectedAPlusPlan : !activePrompt.trim()
-  const submitDisabled = actionDisabled || !hasStyleReference || styleReferenceLimitExceeded
+  const submitDisabled = actionDisabled || (styleReferenceRequired && !hasStyleReference) || styleReferenceLimitExceeded
   const canGoPrev = visiblePlanCount > 0 && visiblePlanIndex != null && visiblePlanIndex > 0
   const canGoNext = visiblePlanCount > 0 && visiblePlanIndex != null && visiblePlanIndex < visiblePlanCount - 1
   const actionPositionLabel = visiblePlanCount > 0 && visiblePlanIndex != null
@@ -308,12 +359,12 @@ export default function AmazonPlanner() {
       : '未选择'
   const checks = plannerMode === 'aplus'
     ? getAmazonAPlusComplianceChecks(draft, selectedAPlusPlan, aPlusType, inputImages.length, hasStyleReference)
-    : getAmazonListingPlannerChecks(draft, targetSize, inputImages.length, hasStyleReference)
+    : getAmazonListingPlannerChecks(draft, targetSize, inputImages.length, hasStyleReference, styleReferenceRequired)
   const atImageLimit = inputImages.length >= API_MAX_IMAGES
   const hasPlanningInput = Boolean(listingText.trim() || draft.productTitle.trim() || draft.sellingPoints.trim() || inputImages.length > 0)
   const hasPlanOptions = visiblePlanCount > 0
   const hasSelectedPlan = plannerMode === 'aplus' ? Boolean(selectedAPlusPlan) : Boolean(selectedPlan)
-  const activeWorkflowStep = !hasPlanningInput ? 0 : !hasPlanOptions ? 1 : !hasStyleReference ? 2 : !hasSelectedPlan ? 3 : 4
+  const activeWorkflowStep = !hasPlanningInput ? 0 : !hasPlanOptions ? 1 : styleReferenceRequired && !hasStyleReference ? 2 : !hasSelectedPlan ? 3 : 4
   const workflowSteps = [
     {
       label: '准备资料',
@@ -327,11 +378,13 @@ export default function AmazonPlanner() {
     },
     {
       label: '选择风格',
-      detail: hasStyleReference
-        ? `${selectedStyleCandidate?.label ?? '已选择'} · 隐藏参考`
-        : styleImages.some((image) => image.status === 'done')
-          ? '请选择一张风格板'
-          : '生成 3 张低清风格板',
+      detail: !styleReferenceRequired
+        ? 'MAIN 主图跳过风格板'
+        : hasStyleReference
+          ? `${selectedStyleCandidate?.label ?? '已选择'} · 隐藏参考`
+          : styleImages.some((image) => image.status === 'done')
+            ? '请选择一张风格板'
+            : '生成 3 张低清风格板',
     },
     {
       label: plannerMode === 'aplus' ? '选择模块' : '选择图片位',
@@ -360,6 +413,13 @@ export default function AmazonPlanner() {
     }
   }, [showToast])
 
+  useEffect(() => {
+    return () => {
+      plannerAbortControllerRef.current?.abort()
+      plannerAbortControllerRef.current = null
+    }
+  }, [])
+
   const upsertPlannerSessionList = (session: AmazonPlannerSession) => {
     setPlannerSessions((current) => sortPlannerSessions([
       session,
@@ -385,6 +445,7 @@ export default function AmazonPlanner() {
       styleCandidates: overrides.styleCandidates ?? styleCandidates,
       styleImages: overrides.styleImages ?? getSessionStyleImages(styleImages),
       selectedStyleIndex: overrides.selectedStyleIndex ?? selectedStyleIndex,
+      styleDensityMode: overrides.styleDensityMode ?? styleDensityMode,
       imagePlans: overrides.imagePlans ?? imagePlans,
       aPlusPlans: overrides.aPlusPlans ?? aPlusPlansWithSizes,
       selectedPlanIndex: overrides.selectedPlanIndex ?? selectedPlanIndex,
@@ -418,11 +479,12 @@ export default function AmazonPlanner() {
       showToast(plannerMode === 'aplus' ? '请先 AI 策划并选择一个 A+ 模块' : '请先 AI 策划并选择一个图片位', 'error')
       return false
     }
-    if (options.requireStyle && !selectedStyleImage?.imageId) {
+    const shouldRequireStyle = options.requireStyle && styleReferenceRequired
+    if (shouldRequireStyle && !selectedStyleImage?.imageId) {
       showToast('请先生成并选择一张风格参考板', 'error')
       return false
     }
-    if (options.requireStyle && styleReferenceLimitExceeded) {
+    if (shouldRequireStyle && styleReferenceLimitExceeded) {
       showToast(`已选择隐藏风格参考板，实际参考图数量不能超过 ${API_MAX_IMAGES} 张；请删除一张产品参考图后再提交。`, 'error')
       return false
     }
@@ -436,7 +498,7 @@ export default function AmazonPlanner() {
         workflow: plannerMode === 'aplus' ? 'amazon-aplus' : 'amazon-listing',
         amazonSlot: plannerMode === 'aplus' ? selectedAPlusPlan?.slot : selectedPlan?.slot,
         ...(plannerMode === 'aplus' ? { aPlusType } : {}),
-        ...(selectedStyleImage?.imageId ? { styleReferenceImageId: selectedStyleImage.imageId } : {}),
+        ...(usesStyleReferenceForActivePlan && selectedStyleImage?.imageId ? { styleReferenceImageId: selectedStyleImage.imageId } : {}),
       },
     })
     setParams({
@@ -512,6 +574,7 @@ export default function AmazonPlanner() {
     setIsGeneratingStyleImages(true)
     setStyleError('')
     setSelectedStyleIndex(null)
+    setStylePreview(null)
     setStyleImages(styleCandidates.map((_, index) => ({ candidateIndex: index, status: 'running' })))
 
     const styleParams = normalizeParamsForSettings({
@@ -608,6 +671,7 @@ export default function AmazonPlanner() {
     setStyleCandidates(result.styleCandidates)
     setStyleImages([])
     setSelectedStyleIndex(null)
+    setStylePreview(null)
     setStyleError('')
     setPlannerError('')
     void savePlannerSession({
@@ -618,6 +682,7 @@ export default function AmazonPlanner() {
       styleCandidates: result.styleCandidates,
       styleImages: [],
       selectedStyleIndex: null,
+      styleDensityMode,
       imagePlans: nextImagePlans,
       aPlusPlans: nextAPlusPlans,
       selectedPlanIndex: nextSelectedPlanIndex,
@@ -629,6 +694,10 @@ export default function AmazonPlanner() {
   }
 
   const createAiPlan = async () => {
+    if (plannerAbortControllerRef.current) {
+      showToast('AI 策划正在进行中', 'info')
+      return
+    }
     if (!listingText.trim()) {
       showToast('请先粘贴标题和五点描述', 'error')
       return
@@ -645,27 +714,42 @@ export default function AmazonPlanner() {
       return
     }
 
+    const controller = new AbortController()
+    plannerAbortControllerRef.current = controller
     setIsPlanning(true)
     setPlannerError('')
     try {
-      applyPlannerResult(
-        await callAmazonPlannerApi({
-          listingText,
-          baseDraft: draft,
-          profile: plannerProfile,
-          referenceImageDataUrls: inputImages.map((image) => image.dataUrl),
-          mode: plannerMode,
-          aPlusType,
-          aPlusGenerationTier: resolutionTier,
-        }),
-        plannerMode === 'aplus' ? 'A+ AI 策划' : 'AI 策划',
-      )
+      const result = await callAmazonPlannerApi({
+        listingText,
+        baseDraft: draft,
+        profile: plannerProfile,
+        referenceImageDataUrls: inputImages.map((image) => image.dataUrl),
+        mode: plannerMode,
+        aPlusType,
+        aPlusGenerationTier: resolutionTier,
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
+      applyPlannerResult(result, plannerMode === 'aplus' ? 'A+ AI 策划' : 'AI 策划')
     } catch (err) {
+      if (controller.signal.aborted || isAbortError(err)) return
       setPlannerError(getPlannerFailureDetail(err))
       showToast('AI 策划失败，请查看详情', 'error')
     } finally {
-      setIsPlanning(false)
+      if (plannerAbortControllerRef.current === controller) {
+        plannerAbortControllerRef.current = null
+        setIsPlanning(false)
+      }
     }
+  }
+
+  const stopAiPlan = () => {
+    const controller = plannerAbortControllerRef.current
+    if (!controller) return
+    controller.abort()
+    plannerAbortControllerRef.current = null
+    setIsPlanning(false)
+    showToast('AI 策划已停止', 'info')
   }
 
   const selectStyleCandidate = (index: number) => {
@@ -676,6 +760,29 @@ export default function AmazonPlanner() {
       selectedStyleIndex: index,
       styleImages: getSessionStyleImages(styleImages),
     })
+  }
+
+  const changeStyleDensityMode = (mode: AmazonStyleDensityMode) => {
+    setStyleDensityMode(mode)
+    updateCurrentPlannerSession({ styleDensityMode: mode })
+  }
+
+  const updateStylePreview = (
+    candidate: AmazonStyleCandidate,
+    imageState: StyleImageState | undefined,
+    event: ReactMouseEvent<HTMLElement>,
+  ) => {
+    if (imageState?.status !== 'done' || !imageState.dataUrl) return
+    setStylePreview({
+      dataUrl: imageState.dataUrl,
+      label: candidate.label,
+      description: candidate.description,
+      ...getStylePreviewPosition(event.clientX, event.clientY),
+    })
+  }
+
+  const openStylePreview = (imageId: string) => {
+    setLightboxImageId(imageId, styleLightboxImageIds.length ? styleLightboxImageIds : [imageId])
   }
 
   const selectPlan = (index: number) => {
@@ -715,6 +822,7 @@ export default function AmazonPlanner() {
     setStyleCandidates([])
     setStyleImages([])
     setSelectedStyleIndex(null)
+    setStylePreview(null)
     setStyleError('')
   }
 
@@ -727,6 +835,7 @@ export default function AmazonPlanner() {
       setStyleCandidates([])
       setStyleImages([])
       setSelectedStyleIndex(null)
+      setStylePreview(null)
       setStyleError('')
     }
   }
@@ -739,6 +848,8 @@ export default function AmazonPlanner() {
     setStyleCandidates([])
     setStyleImages([])
     setSelectedStyleIndex(null)
+    setStyleDensityMode('rich')
+    setStylePreview(null)
     setStyleError('')
     setSelectedPlanIndex(null)
     setSelectedAPlusPlanIndex(null)
@@ -779,6 +890,8 @@ export default function AmazonPlanner() {
     setStyleCandidates(session.styleCandidates)
     setStyleImages(restoredStyleImages)
     setSelectedStyleIndex(selectedStyleRestored ? session.selectedStyleIndex : null)
+    setStyleDensityMode(session.styleDensityMode ?? 'rich')
+    setStylePreview(null)
     setImagePlans(session.imagePlans as AmazonImagePlan[])
     setAPlusPlans(session.aPlusPlans as AmazonAPlusPlan[])
     setSelectedPlanIndex(session.selectedPlanIndex != null && session.imagePlans[session.selectedPlanIndex] ? session.selectedPlanIndex : null)
@@ -1091,6 +1204,16 @@ export default function AmazonPlanner() {
                 >
                   {isPlanning ? '策划中...' : plannerMode === 'aplus' ? 'AI策划A+' : 'AI策划'}
                 </button>
+                {isPlanning && (
+                  <button
+                    type="button"
+                    onClick={stopAiPlan}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:border-red-400/20 dark:bg-gray-900 dark:text-red-300 dark:hover:bg-red-400/10"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                    停止
+                  </button>
+                )}
                 {(listingText.trim() || imagePlans.length > 0 || aPlusPlans.length > 0) && (
                   <button
                     type="button"
@@ -1135,8 +1258,8 @@ export default function AmazonPlanner() {
                 <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">参考图</div>
                 <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                   {inputImages.length > 0
-                    ? `${inputImages.length}/${API_MAX_IMAGES} 张产品参考图${hasStyleReference ? `；正式生成时另附 1 张隐藏风格板（实际 ${effectiveReferenceCount}/${API_MAX_IMAGES}）` : '，将随生成请求一起发送'}`
-                    : hasStyleReference
+                    ? `${inputImages.length}/${API_MAX_IMAGES} 张产品参考图${usesStyleReferenceForActivePlan ? `；正式生成时另附 1 张隐藏风格板（实际 ${effectiveReferenceCount}/${API_MAX_IMAGES}）` : '，将随生成请求一起发送'}`
+                    : usesStyleReferenceForActivePlan
                       ? `未上传产品参考图；正式生成时会附 1 张隐藏风格板`
                       : '建议上传产品实拍、包装或结构参考图'}
                 </div>
@@ -1302,7 +1425,7 @@ export default function AmazonPlanner() {
                 value={draft.scene}
                 onChange={(event) => setDraft((current) => updateDraft(current, 'scene', event.target.value))}
                 className={`${FIELD_CLASS} min-h-[76px] resize-y`}
-                placeholder="主图建议留空；附图填写真实场景"
+                placeholder="例：白底产品构图 / 厨房台面场景 / 尺寸标注信息图"
               />
             </label>
             <label className="md:col-span-2">
@@ -1399,18 +1522,32 @@ export default function AmazonPlanner() {
                 <div>
                   <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">视觉风格选择</div>
                   <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                    先生成 3 张低清风格参考板，选择后会作为隐藏参考附加到每次正式生图请求末尾。
+                    先生成 3 张低清风格参考板，附图和 A+ 正式生图时会作为隐藏参考附加到请求末尾。
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={generateStyleImages}
-                  disabled={isGeneratingStyleImages || styleCandidates.length === 0}
-                  className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition ${isGeneratingStyleImages || styleCandidates.length === 0 ? 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-white/[0.06] dark:text-gray-600' : 'bg-gray-900 text-white hover:bg-gray-700 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200'}`}
-                >
-                  <PhotoIcon className="h-4 w-4" />
-                  {isGeneratingStyleImages ? '生成中...' : '生成风格板'}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex h-9 rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-semibold dark:border-white/[0.08] dark:bg-gray-900">
+                    {STYLE_DENSITY_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => changeStyleDensityMode(option.value)}
+                        className={`rounded-md px-2.5 transition ${styleDensityMode === option.value ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-950' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100'}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={generateStyleImages}
+                    disabled={isGeneratingStyleImages || styleCandidates.length === 0}
+                    className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition ${isGeneratingStyleImages || styleCandidates.length === 0 ? 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-white/[0.06] dark:text-gray-600' : 'bg-gray-900 text-white hover:bg-gray-700 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200'}`}
+                  >
+                    <PhotoIcon className="h-4 w-4" />
+                    {isGeneratingStyleImages ? '生成中...' : '生成风格板'}
+                  </button>
+                </div>
               </div>
               {styleError && (
                 <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-200">
@@ -1422,41 +1559,76 @@ export default function AmazonPlanner() {
                   {styleCandidates.map((candidate, index) => {
                     const imageState = styleImages.find((image) => image.candidateIndex === index)
                     const isSelected = selectedStyleIndex === index && imageState?.status === 'done'
-                    const canSelect = imageState?.status === 'done' && imageState.imageId
+                    const previewImageId = imageState?.status === 'done' ? imageState.imageId : undefined
+                    const canSelect = Boolean(previewImageId)
+                    const canPreview = Boolean(previewImageId && imageState?.dataUrl)
                     return (
-                      <button
+                      <div
                         key={`${candidate.label}-${index}`}
-                        type="button"
-                        onClick={() => canSelect && selectStyleCandidate(index)}
-                        disabled={!canSelect}
-                        className={`min-w-0 overflow-hidden rounded-xl border text-left transition ${isSelected ? 'border-violet-400 bg-violet-50 ring-2 ring-violet-500/15 dark:border-violet-300/70 dark:bg-violet-500/10' : canSelect ? 'border-gray-200 bg-white hover:bg-gray-50 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.05]' : 'cursor-not-allowed border-gray-200 bg-white opacity-70 dark:border-white/[0.08] dark:bg-gray-900'}`}
+                        onMouseEnter={(event) => updateStylePreview(candidate, imageState, event)}
+                        onMouseMove={(event) => updateStylePreview(candidate, imageState, event)}
+                        onMouseLeave={() => setStylePreview(null)}
+                        className={`relative min-w-0 overflow-hidden rounded-xl border text-left transition ${isSelected ? 'border-violet-400 bg-violet-50 ring-2 ring-violet-500/15 dark:border-violet-300/70 dark:bg-violet-500/10' : canSelect ? 'border-gray-200 bg-white hover:bg-gray-50 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.05]' : 'border-gray-200 bg-white opacity-70 dark:border-white/[0.08] dark:bg-gray-900'}`}
                       >
-                        <div className="aspect-square bg-gray-100 dark:bg-white/[0.04]">
-                          {imageState?.status === 'done' && imageState.dataUrl ? (
-                            <img src={imageState.dataUrl} alt={candidate.label} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center px-3 text-center text-xs text-gray-400">
-                              {imageState?.status === 'running' ? '生成中...' : imageState?.status === 'error' ? '生成失败' : '待生成'}
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="min-w-0 truncate text-xs font-semibold text-gray-900 dark:text-gray-100">{candidate.label}</span>
-                            {isSelected && (
-                              <span className="shrink-0 rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">已选</span>
+                        {canPreview && previewImageId && (
+                          <button
+                            type="button"
+                            onClick={() => openStylePreview(previewImageId)}
+                            title="预览风格板大图"
+                            aria-label={`预览 ${candidate.label} 风格板大图`}
+                            className="absolute right-2 top-2 z-10 inline-flex h-8 items-center gap-1 rounded-lg bg-white/95 px-2 text-[11px] font-semibold text-gray-700 shadow-sm ring-1 ring-black/5 transition hover:bg-white dark:bg-gray-950/90 dark:text-gray-100 dark:ring-white/10 dark:hover:bg-gray-900"
+                          >
+                            <EyeIcon className="h-3.5 w-3.5" />
+                            预览
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => canSelect && selectStyleCandidate(index)}
+                          disabled={!canSelect}
+                          className="block h-full w-full text-left disabled:cursor-not-allowed"
+                        >
+                          <div className="aspect-square bg-gray-100 dark:bg-white/[0.04]">
+                            {imageState?.status === 'done' && imageState.dataUrl ? (
+                              <img src={imageState.dataUrl} alt={candidate.label} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center px-3 text-center text-xs text-gray-400">
+                                {imageState?.status === 'running' ? '生成中...' : imageState?.status === 'error' ? '生成失败' : '待生成'}
+                              </div>
                             )}
                           </div>
-                          <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">{candidate.description}</div>
-                        </div>
-                      </button>
+                          <div className="p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="min-w-0 truncate text-xs font-semibold text-gray-900 dark:text-gray-100">{candidate.label}</span>
+                              {isSelected && (
+                                <span className="shrink-0 rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">已选</span>
+                              )}
+                            </div>
+                            <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">{candidate.description}</div>
+                          </div>
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
               )}
+              {stylePreview && (
+                <div
+                  className="pointer-events-none fixed z-50 hidden w-[420px] max-w-[calc(100vw-24px)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl sm:block dark:border-white/[0.08] dark:bg-gray-950"
+                  style={{ left: stylePreview.left, top: stylePreview.top }}
+                >
+                  <img src={stylePreview.dataUrl} alt="" className="aspect-square w-full bg-gray-100 object-contain dark:bg-white/[0.04]" />
+                  <div className="border-t border-gray-100 p-3 dark:border-white/[0.08]">
+                    <div className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{stylePreview.label}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{stylePreview.description}</div>
+                  </div>
+                </div>
+              )}
               {selectedStyleCandidate && selectedStyleImage?.imageId && (
                 <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-800 dark:border-violet-300/20 dark:bg-violet-400/10 dark:text-violet-200">
-                  已选择「{selectedStyleCandidate.label}」。正式生成时会隐藏附加这张风格参考板作为最后一张参考图，用于统一字体感觉、色板、光影、材质和标注样式，不复制其中占位文字、固定版式或产品摆放。
+                  {isMainListingPlan
+                    ? `已选择「${selectedStyleCandidate.label}」，但当前 MAIN 主图不会附加这张风格板；切换到附图或 A+ 时才会作为隐藏参考。`
+                    : `已选择「${selectedStyleCandidate.label}」。正式生成时会隐藏附加这张风格参考板作为最后一张参考图，用于统一字体感觉、色板、光影、材质和标注样式，不复制其中占位文字、固定版式或产品摆放。`}
                 </div>
               )}
               {styleReferenceLimitExceeded && (

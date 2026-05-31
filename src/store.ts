@@ -53,6 +53,7 @@ import { validateMaskMatchesImage } from './lib/canvasImage'
 import { orderInputImagesForMask } from './lib/mask'
 import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
 import { getTaskHistoryCategory } from './lib/taskHistory'
+import { isAmazonListingMainSlot } from './lib/listingPlanner'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
@@ -106,6 +107,14 @@ function isAmazonTaskWorkflow(
   return workflow === 'amazon-listing' || workflow === 'amazon-aplus'
 }
 
+function removeMainStyleReference(
+  category: NonNullable<TaskRecord['category']>,
+): NonNullable<TaskRecord['category']> {
+  if (category.workflow !== 'amazon-listing' || !isAmazonListingMainSlot(category.amazonSlot) || !category.styleReferenceImageId) return category
+  const { styleReferenceImageId, ...nextCategory } = category
+  return nextCategory
+}
+
 function createNextSubmitTaskCategory(task: TaskRecord): NonNullable<TaskRecord['category']> {
   const historyCategory = getTaskHistoryCategory(task)
   const workflow = task.category?.workflow ?? historyCategory.workflow
@@ -123,7 +132,9 @@ function createNextSubmitTaskCategory(task: TaskRecord): NonNullable<TaskRecord[
   if (hasExplicitProductTitle || productTitle) category.productTitle = productTitle
   if (amazonSlot) category.amazonSlot = amazonSlot
   if (workflow === 'amazon-aplus' && aPlusType) category.aPlusType = aPlusType
-  if (styleReferenceImageId) category.styleReferenceImageId = styleReferenceImageId
+  if (styleReferenceImageId && !(workflow === 'amazon-listing' && isAmazonListingMainSlot(amazonSlot))) {
+    category.styleReferenceImageId = styleReferenceImageId
+  }
 
   return category
 }
@@ -133,10 +144,11 @@ function resolvePendingTaskCategory(
   trimmedPrompt: string,
 ): NonNullable<TaskRecord['category']> {
   if (!pendingTaskCategory) return { workflow: 'gallery' }
-  if (pendingTaskCategory.mode === 'next-submit') return pendingTaskCategory.category
-  return pendingTaskCategory.prompt.trim() === trimmedPrompt
+  if (pendingTaskCategory.mode === 'next-submit') return removeMainStyleReference(pendingTaskCategory.category)
+  const category: NonNullable<TaskRecord['category']> = pendingTaskCategory.prompt.trim() === trimmedPrompt
     ? pendingTaskCategory.category
     : { workflow: 'gallery' }
+  return removeMainStyleReference(category)
 }
 
 export function getErrorToastMessage(message: string): string {

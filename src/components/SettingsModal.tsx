@@ -40,6 +40,7 @@ function newId(prefix: string) {
 
 const ADD_CUSTOM_PROVIDER_VALUE = '__add_custom_provider__'
 const COPY_IMPORT_URL_OPTIONS_STORAGE_KEY = 'gpt-image-playground.copy-import-url-options'
+const LEGACY_DEFAULT_CHAT_MODEL = 'deepseek-v4-flash'
 
 const DEFAULT_COPY_IMPORT_URL_OPTIONS = {
   includeApiKey: false,
@@ -372,6 +373,11 @@ export default function SettingsModal() {
 
   const getDefaultModelForMode = (apiMode: AppSettings['apiMode']) =>
     apiMode === 'responses' ? DEFAULT_RESPONSES_MODEL : apiMode === 'chat' ? DEFAULT_CHAT_MODEL : DEFAULT_IMAGES_MODEL
+  const isDefaultModelForModeSwitch = (model: string) =>
+    model === DEFAULT_IMAGES_MODEL ||
+    model === DEFAULT_RESPONSES_MODEL ||
+    model === DEFAULT_CHAT_MODEL ||
+    model === LEGACY_DEFAULT_CHAT_MODEL
   const getApiModeLabel = (apiMode: AppSettings['apiMode']) =>
     apiMode === 'responses' ? 'Responses API' : apiMode === 'chat' ? 'Chat Completions' : 'Images API'
   const amazonPlannerProfiles = draft.profiles.filter(isAmazonPlannerProfile)
@@ -1555,7 +1561,7 @@ export default function SettingsModal() {
                     onChange={(value) => {
                       const apiMode = value as AppSettings['apiMode']
                       const nextModel =
-                        activeProfile.model === DEFAULT_IMAGES_MODEL || activeProfile.model === DEFAULT_RESPONSES_MODEL || activeProfile.model === DEFAULT_CHAT_MODEL
+                        isDefaultModelForModeSwitch(activeProfile.model)
                           ? getDefaultModelForMode(apiMode)
                           : activeProfile.model
                       updateActiveProfile({ apiMode, model: nextModel }, true)
@@ -1594,7 +1600,7 @@ export default function SettingsModal() {
                   ) : (activeProfile.apiMode ?? DEFAULT_SETTINGS.apiMode) === 'responses' ? (
                     <>Responses API 需要使用支持 <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">image_generation</code> 工具的文本模型，例如 <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">{DEFAULT_RESPONSES_MODEL}</code>。</>
                   ) : (activeProfile.apiMode ?? DEFAULT_SETTINGS.apiMode) === 'chat' ? (
-                    <>Chat Completions 用于 AI 策划文本模型，例如 DeepSeek 的 <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">{DEFAULT_CHAT_MODEL}</code>；生图请使用 Images API 配置。</>
+                    <>Chat Completions 用于 AI 策划文本模型，默认 <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">{DEFAULT_CHAT_MODEL}</code>；生图请使用 Images API 配置。</>
                   ) : (
                     <>Images API 需要使用 GPT Image 模型，例如 <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-white/[0.06]">{DEFAULT_IMAGES_MODEL}</code>。</>
                   )}

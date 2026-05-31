@@ -1,7 +1,9 @@
 import type { AmazonImageKind, AmazonPromptDraft } from './amazonPrompt'
+import type { AmazonStyleDensityMode } from '../types'
 import { calculateImageSize, type SizeTier } from './size'
 
 export type AmazonPlannerMode = 'listing' | 'aplus'
+export type { AmazonStyleDensityMode } from '../types'
 export type APlusContentType = 'standard' | 'standard-large' | 'premium'
 export type APlusModuleKind =
   | 'header-banner'
@@ -175,11 +177,24 @@ const CJK_ON_IMAGE_TEXT_RE = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud
 const STYLE_REFERENCE_GUARD = [
   'Style reference rule:',
   '- The last input image is a hidden style reference selected by the user.',
-  '- Use it only for overall color tone, contrast, typography feel, font weight, text hierarchy, lighting, material finish, visual polish, and callout/icon treatment.',
-  '- If the actual prompt requires on-image text, borrow only the typography feel, hierarchy, spacing rhythm, and graphic language.',
-  '- Do not copy any placeholder words, fixed layout, color swatch positions, exact composition, product arrangement, product count, props, or scene from the style reference board.',
-  '- Follow the prompt below for the actual image content and layout.',
+  '- Use it only for color palette, lighting, contrast, material finish, typography feel, and overall visual polish.',
+  '- Do not copy any placeholder words, fixed layout, color swatch positions, exact composition, product arrangement, product count, props, scene, or information density from the style reference board.',
+  '- Follow the image task, layout density, and negative prompt sections for the actual content and arrangement.',
 ].join('\n')
+
+const STYLE_DENSITY_GUIDES: Record<AmazonStyleDensityMode, string> = {
+  rich: [
+    'Layout density:',
+    '- Use a polished, information-rich Amazon gallery layout when the selected image type benefits from explanation.',
+    '- Build clear hierarchy with mobile-readable US-English copy, multiple well-spaced callouts, detail crops, comparison areas, measurement arrows, or use-case zones as appropriate.',
+    '- Keep the composition premium and organized; information-rich should still be readable, balanced, and uncluttered.',
+  ].join('\n'),
+  minimal: [
+    'Layout density:',
+    '- Use a refined minimal Amazon layout with fewer callouts, generous balanced spacing, light icon or line treatment, and restrained US-English copy.',
+    '- Keep the product and one or two strongest messages dominant, with clean hierarchy and no clutter.',
+  ].join('\n'),
+}
 
 const STYLE_REFERENCE_BOARD_REQUIREMENTS = [
   'Style reference board requirements:',
@@ -189,6 +204,10 @@ const STYLE_REFERENCE_BOARD_REQUIREMENTS = [
   '- The board must visibly include color palette swatches, background/material texture samples, lighting/material samples, and a small product-finish or product-detail style sample derived from the uploaded product references.',
   '- Keep this as a reusable style guide image for later generations, with clear examples of font feeling, color tone, lighting, material finish, icon/callout language, and visual polish.',
 ].join('\n')
+
+export function isAmazonListingMainSlot(slot?: string | null): boolean {
+  return slot?.trim().toUpperCase() === 'MAIN'
+}
 
 export function normalizeOnImageCopy(copy: string): string {
   return copy
@@ -204,12 +223,14 @@ function formatPromptBlock(options: {
   negativePrompt?: string
   seriesStyleGuide?: string | null
   styleReferenceAttached?: boolean
+  styleDensityMode?: AmazonStyleDensityMode
 }) {
   const sections = [
     options.prompt.trim(),
     options.seriesStyleGuide?.trim()
       ? `Series style guide:\n${options.seriesStyleGuide.trim()}`
       : '',
+    options.styleReferenceAttached ? STYLE_DENSITY_GUIDES[options.styleDensityMode ?? 'rich'] : '',
     options.negativePrompt?.trim()
       ? `Negative prompt:\n${options.negativePrompt.trim()}`
       : '',
@@ -222,6 +243,7 @@ function formatPromptBlock(options: {
 export function buildAmazonPlanPrompt(plan: Pick<AmazonImagePlan, 'prompt' | 'negativePrompt'> & {
   seriesStyleGuide?: string | null
   styleReferenceAttached?: boolean
+  styleDensityMode?: AmazonStyleDensityMode
 }): string {
   return formatPromptBlock(plan)
 }
@@ -342,6 +364,7 @@ export function withAPlusGenerationSizes(plans: AmazonAPlusPlan[], tier: SizeTie
 export function buildAmazonAPlusPlanPrompt(plan: Pick<AmazonAPlusPlan, 'prompt' | 'negativePrompt'> & {
   seriesStyleGuide?: string | null
   styleReferenceAttached?: boolean
+  styleDensityMode?: AmazonStyleDensityMode
 }): string {
   return formatPromptBlock(plan)
 }

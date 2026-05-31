@@ -312,7 +312,37 @@ describe('mask draft lifecycle in store actions', () => {
     })
   })
 
-  it('appends a hidden style reference image when the submitted Amazon prompt matches', async () => {
+  it('appends a hidden style reference image when the submitted Amazon non-main prompt matches', async () => {
+    const styleImage = { id: 'style-reference-image', dataUrl: 'data:image/png;base64,style' }
+    await putImage(imageA)
+    await putImage(styleImage)
+    useStore.setState({
+      prompt: 'listing prompt',
+      inputImages: [imageA],
+      pendingTaskCategory: {
+        mode: 'prompt-match',
+        prompt: 'listing prompt',
+        category: {
+          productTitle: 'Large Folding Umbrella',
+          workflow: 'amazon-listing',
+          amazonSlot: 'PT01',
+          styleReferenceImageId: styleImage.id,
+        },
+      },
+    })
+
+    await submitTask()
+
+    const task = useStore.getState().tasks[0]
+    expect(task?.inputImageIds).toEqual([imageA.id, styleImage.id])
+    expect(task?.category).toMatchObject({
+      workflow: 'amazon-listing',
+      amazonSlot: 'PT01',
+      styleReferenceImageId: styleImage.id,
+    })
+  })
+
+  it('does not append a hidden style reference image for an Amazon MAIN prompt', async () => {
     const styleImage = { id: 'style-reference-image', dataUrl: 'data:image/png;base64,style' }
     await putImage(imageA)
     await putImage(styleImage)
@@ -334,12 +364,12 @@ describe('mask draft lifecycle in store actions', () => {
     await submitTask()
 
     const task = useStore.getState().tasks[0]
-    expect(task?.inputImageIds).toEqual([imageA.id, styleImage.id])
+    expect(task?.inputImageIds).toEqual([imageA.id])
     expect(task?.category).toMatchObject({
       workflow: 'amazon-listing',
       amazonSlot: 'MAIN',
-      styleReferenceImageId: styleImage.id,
     })
+    expect(task?.category).not.toHaveProperty('styleReferenceImageId')
   })
 
   it('blocks submit when visible references plus hidden style reference exceed the API image limit', async () => {
@@ -358,7 +388,7 @@ describe('mask draft lifecycle in store actions', () => {
         category: {
           productTitle: 'Large Folding Umbrella',
           workflow: 'amazon-listing',
-          amazonSlot: 'MAIN',
+          amazonSlot: 'PT01',
           styleReferenceImageId: styleImage.id,
         },
       },

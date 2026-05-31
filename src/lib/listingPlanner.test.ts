@@ -10,6 +10,7 @@ import {
   getAPlusModuleDisplayName,
   getAPlusModuleEnglishName,
   getAPlusModuleSpecs,
+  isAmazonListingMainSlot,
 } from './listingPlanner'
 import { callAmazonPlannerApi } from './listingPlannerApi'
 
@@ -29,12 +30,13 @@ afterEach(() => {
 })
 
 describe('Amazon prompt builders', () => {
-  it('uses only LLM prompt content, series style guide, negative prompt, and optional style guard', () => {
+  it('uses LLM prompt content, series style guide, density guidance, negative prompt, and optional style guard', () => {
     const prompt = buildAmazonPlanPrompt({
       prompt: 'Professional Amazon main image of the exact product.',
       negativePrompt: 'text, logo, extra accessories',
       seriesStyleGuide: 'Use warm studio light and refined charcoal typography across the set.',
       styleReferenceAttached: true,
+      styleDensityMode: 'rich',
     })
 
     expect(prompt).toContain('Professional Amazon main image of the exact product.')
@@ -42,13 +44,53 @@ describe('Amazon prompt builders', () => {
     expect(prompt).toContain('Use warm studio light')
     expect(prompt).toContain('Negative prompt:')
     expect(prompt).toContain('text, logo, extra accessories')
+    expect(prompt).toContain('Layout density:')
+    expect(prompt).toContain('information-rich Amazon gallery layout')
+    expect(prompt).toContain('multiple well-spaced callouts')
     expect(prompt).toContain('The last input image is a hidden style reference')
-    expect(prompt).toContain('color tone, contrast, typography feel')
-    expect(prompt).toContain('font weight, text hierarchy')
-    expect(prompt).toContain('callout/icon treatment')
+    expect(prompt).toContain('color palette, lighting, contrast')
+    expect(prompt).toContain('typography feel')
     expect(prompt).toContain('Do not copy any placeholder words, fixed layout')
     expect(prompt).not.toContain('Render only the copy specified below')
     expect(prompt).not.toContain('A+ module requirements:')
+  })
+
+  it('builds minimal density guidance when requested', () => {
+    const prompt = buildAmazonPlanPrompt({
+      prompt: 'Create an Amazon secondary image.',
+      negativePrompt: 'price, reviews',
+      seriesStyleGuide: 'Refined kitchen styling.',
+      styleReferenceAttached: true,
+      styleDensityMode: 'minimal',
+    })
+
+    expect(prompt).toContain('Layout density:')
+    expect(prompt).toContain('refined minimal Amazon layout')
+    expect(prompt).toContain('fewer callouts')
+    expect(prompt).not.toContain('information-rich Amazon gallery layout')
+  })
+
+  it('builds MAIN prompts without series style guide or style reference guard when style is disabled', () => {
+    const prompt = buildAmazonPlanPrompt({
+      prompt: 'Amazon compliant MAIN image on a pure white background.',
+      negativePrompt: 'text, props, non-white background',
+      seriesStyleGuide: null,
+      styleReferenceAttached: false,
+    })
+
+    expect(prompt).toContain('Amazon compliant MAIN image')
+    expect(prompt).toContain('Negative prompt:')
+    expect(prompt).toContain('text, props, non-white background')
+    expect(prompt).not.toContain('Series style guide:')
+    expect(prompt).not.toContain('Layout density:')
+    expect(prompt).not.toContain('The last input image is a hidden style reference')
+  })
+
+  it('identifies the Amazon listing MAIN slot regardless of casing or spacing', () => {
+    expect(isAmazonListingMainSlot('MAIN')).toBe(true)
+    expect(isAmazonListingMainSlot(' main ')).toBe(true)
+    expect(isAmazonListingMainSlot('PT01')).toBe(false)
+    expect(isAmazonListingMainSlot(undefined)).toBe(false)
   })
 
   it('builds A+ prompts with the same LLM-led structure', () => {
@@ -62,6 +104,7 @@ describe('Amazon prompt builders', () => {
     expect(prompt).toContain('Premium A+ banner')
     expect(prompt).toContain('Bright ceramic editorial style')
     expect(prompt).toContain('pricing, reviews, clutter')
+    expect(prompt).not.toContain('Layout density:')
     expect(prompt).not.toContain('The last input image is a hidden style reference')
   })
 
@@ -186,6 +229,7 @@ function createAPlusPayload(prefix: 'A+S' | 'A+L' | 'A+P', title = 'AI planned A
 describe('callAmazonPlannerApi', () => {
   it('uses Responses API planning with JSON schema and attached reference images', async () => {
     const apiPayload = createApiPayload()
+    const controller = new AbortController()
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({
       output_text: JSON.stringify(apiPayload),
     }), {
@@ -204,10 +248,12 @@ describe('callAmazonPlannerApi', () => {
         apiMode: 'responses',
         model: 'gpt-planner-profile',
       }),
+      signal: controller.signal,
     })
 
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('https://api.example.com/v1/responses')
+    expect(init?.signal).toBe(controller.signal)
     const body = JSON.parse(String(init?.body))
     expect(body.instructions).toContain('The application only fixes the slot count and order')
     expect(body.instructions).toContain('Amazon Listing reference material for the planner')
@@ -220,6 +266,10 @@ describe('callAmazonPlannerApi', () => {
     expect(body.instructions).toContain('color palette swatches')
     expect(body.instructions).toContain('lighting/material samples')
     expect(body.instructions).toContain('icon/callout treatment')
+    expect(body.instructions).toContain('fully plan the finished Amazon image')
+    expect(body.instructions).toContain('complete information design')
+    expect(body.instructions).not.toContain('sparse copy')
+    expect(body.instructions).not.toContain('leave enough whitespace')
     expect(body.instructions).not.toContain('Embedded Amazon Listing knowledge rules')
     expect(body.instructions).not.toContain('mandatory phrase')
     expect(body.text.format.type).toBe('json_schema')
@@ -329,6 +379,10 @@ describe('callAmazonPlannerApi', () => {
     expect(body.instructions).toContain('typography samples')
     expect(body.instructions).toContain('color palette swatches')
     expect(body.instructions).toContain('lighting/material samples')
+    expect(body.instructions).toContain('fully plan the finished Amazon image')
+    expect(body.instructions).toContain('complete information design')
+    expect(body.instructions).not.toContain('sparse copy')
+    expect(body.instructions).not.toContain('leave enough whitespace')
     expect(body.instructions).not.toContain('A+ compliance:')
     expect(result.mode).toBe('aplus')
     expect(result.aPlusPlans).toHaveLength(8)
