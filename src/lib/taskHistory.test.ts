@@ -115,6 +115,24 @@ describe('task history categories', () => {
     })).toBe(false)
   })
 
+  it('matches product filters after cleaning title punctuation and invisible characters', () => {
+    const record = task({
+      category: {
+        productTitle: '“Summer Dresses for Women\u200B”',
+        workflow: 'amazon-aplus',
+      },
+    })
+
+    expect(matchesTaskHistoryFilters(record, {
+      searchQuery: '',
+      filterStatus: 'all',
+      filterFavorite: false,
+      filterProductTitle: 'Summer Dresses for Women...',
+      filterWorkflow: 'all',
+      filterAspect: 'all',
+    })).toBe(true)
+  })
+
   it('sorts product filter options by most recent task', () => {
     const options = getTaskProductFilterOptions([
       task({ id: 'old-lamp', createdAt: 1, category: { productTitle: 'LED Desk Lamp', workflow: 'amazon-aplus' } }),
@@ -127,5 +145,26 @@ describe('task history categories', () => {
       ['Large Folding Umbrella', 1],
     ])
   })
-})
 
+  it('groups Listing and A+ history under the same cleaned product title', () => {
+    const options = getTaskProductFilterOptions([
+      task({
+        id: 'listing-dress',
+        createdAt: 1,
+        category: { productTitle: 'Summer Dresses for Women...', workflow: 'amazon-listing' },
+      }),
+      task({
+        id: 'aplus-dress',
+        createdAt: 2,
+        category: { productTitle: '“Summer Dresses for Women\u200B”', workflow: 'amazon-aplus' },
+      }),
+    ])
+
+    expect(options).toHaveLength(1)
+    expect(options[0]).toMatchObject({
+      label: 'Summer Dresses for Women',
+      value: 'Summer Dresses for Women',
+      count: 2,
+    })
+  })
+})

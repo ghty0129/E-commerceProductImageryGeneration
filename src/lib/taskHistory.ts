@@ -9,6 +9,9 @@ const PRODUCT_TITLE_PATTERNS = [
   /(?:^|\n)\s*Product title:\s*(.+?)(?:\n|$)/i,
   /(?:^|\n)\s*Product facts:\s*[\s\S]*?Product title:\s*(.+?)(?:\n|$)/i,
 ]
+const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g
+const OUTER_TITLE_WRAPPER_PATTERN = /^[\s"'`“”‘’「」『』《》（）()【】[\]]+|[\s"'`“”‘’「」『』《》（）()【】[\]]+$/g
+const TRAILING_TITLE_NOISE_PATTERN = /(?:\s*(?:\.{2,}|…+|[.。!！?？,，;；:：、|/\\]+)\s*)+$/g
 
 export interface TaskHistoryCategory {
   productTitle: string
@@ -49,17 +52,24 @@ function parseSize(size: string | undefined | null) {
 }
 
 function normalizeText(value: string) {
-  return value.trim().replace(/\s+/g, ' ')
+  return value.normalize('NFKC').replace(ZERO_WIDTH_PATTERN, '').trim().replace(/\s+/g, ' ')
+}
+
+function normalizeProductTitleText(value: string) {
+  return normalizeText(value)
+    .replace(OUTER_TITLE_WRAPPER_PATTERN, '')
+    .replace(TRAILING_TITLE_NOISE_PATTERN, '')
+    .replace(OUTER_TITLE_WRAPPER_PATTERN, '')
+    .trim()
 }
 
 export function normalizeProductTitle(value: string) {
-  return normalizeText(value).toLowerCase()
+  return normalizeProductTitleText(value).toLowerCase()
 }
 
 function cleanInferredProductTitle(value: string) {
-  const cleaned = normalizeText(value)
+  const cleaned = normalizeProductTitleText(value)
     .replace(/^\[fill in exact product name\]$/i, '')
-    .replace(/\.$/, '')
     .trim()
   return cleaned.length > 120 ? `${cleaned.slice(0, 117)}...` : cleaned
 }

@@ -1,6 +1,12 @@
 import { useCallback, useMemo } from 'react'
 import { removeMultipleTasks, useStore } from '../store'
-import { ALL_PRODUCT_FILTER, UNCATEGORIZED_PRODUCT_FILTER, getTaskProductFilterOptions, matchesTaskHistoryFilters } from '../lib/taskHistory'
+import {
+  ALL_PRODUCT_FILTER,
+  UNCATEGORIZED_PRODUCT_FILTER,
+  getTaskProductFilterOptions,
+  matchesTaskHistoryFilters,
+  normalizeProductTitle,
+} from '../lib/taskHistory'
 import type { HistoryAspectFilter, HistoryWorkflowFilter } from '../types'
 import Select from './Select'
 import { TrashIcon } from './icons'
@@ -26,7 +32,7 @@ export default function SearchBar() {
     const hasSelectedProduct = Boolean(
       filterProductTitle &&
       filterProductTitle !== UNCATEGORIZED_PRODUCT_FILTER &&
-      !options.some((option) => option.value === filterProductTitle),
+      !options.some((option) => normalizeProductTitle(option.value) === normalizeProductTitle(filterProductTitle)),
     )
 
     return [
