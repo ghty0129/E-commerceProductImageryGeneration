@@ -11,13 +11,16 @@
 按自然周（周一至周日）整理，最新一周在最上方。每个周块可展开查看本周推送内容，提交号用于回溯具体改动。
 
 <details>
-<summary><strong>2026-06-08 至 2026-06-14</strong> - DeepSeek 策划兼容与部署提示</summary>
+<summary><strong>2026-06-08 至 2026-06-14</strong> - 可编辑风格图、移动端操作窗与 DeepSeek 策划兼容</summary>
 
+- 视觉风格新增可编辑预设和“我的风格”库，用户可从内置风格派生色板、字体、光影、材质和信息密度，并作为隐藏参考图参与附图和 A+ 生图。
+- 风格编辑窗口保留英文方向作为实际参考内容，同时为字体方向、光影方向和材质方向增加中文说明，便于理解但不写入最终风格参考图。
+- 移动端生成操作悬浮窗支持收起到左侧或右侧，收起后可通过贴边小标签展开，减少遮挡图片预览和底部输入区。
 - AI 策划检测到 `https://api.deepseek.com` 时自动跳过参考图，仅发送纯文本 Chat Completions 请求，避免 DeepSeek 官方接口因 `image_url` 报错。
 - 补充 DeepSeek 策划配置说明，明确官方 Chat Completions 当前不接收参考图。
 - DeepSeek Chat Completions 和 Responses 策划统一按纯文本模型处理，增加反脑补约束，并在设置页和 Amazon 面板提示用户补齐产品关键特征。
 - 补充 Vercel 体验版调用 HTTP API 的 HTTPS 安全策略提示。
-- 提交：`8927ad1`、`8a42d09`、`b2ab475`。
+- 提交：`8927ad1`、`8a42d09`、`b2ab475`，以及本次可编辑风格图更新。
 
 </details>
 
@@ -26,7 +29,7 @@
 
 - OpenRouter 生图改走 Chat Completions 图片生成，修复普通 Images API 路径下的 404。
 - OpenRouter 请求补齐 `image_config.aspect_ratio` 和 `image_config.image_size`，A+ 非 1:1 图片会映射到最接近的支持比例，减少实际输出回落到 1024 级别。
-- 视觉风格改为内置预设风格图，附图和 A+ 生成时会作为隐藏参考图参与最终生图。
+- 视觉风格支持内置预设和可编辑“我的风格”，附图和 A+ 生成时会作为隐藏参考图参与最终生图。
 - 参考图请求前会压缩、控尺寸并校验负载，修复大参考图导致的 413。
 - 普通生图限制为 Images API，OpenRouter 图片模型保留兼容入口，避免误用不支持生图的配置。
 - README 增加在线体验说明，Windows 启动脚本会在启动前自动检查并安装依赖。

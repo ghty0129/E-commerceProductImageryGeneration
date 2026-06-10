@@ -3,6 +3,7 @@ import type {
   ApiProfile,
   ApiProvider,
   AppSettings,
+  CustomStyleReference,
   CustomProviderContentType,
   CustomProviderDefinition,
   CustomProviderFileMapping,
@@ -12,6 +13,7 @@ import type {
   CustomProviderSubmitMapping,
   CustomProviderTemplate,
   ReferenceImageEditAction,
+  StyleReferenceEditState,
 } from '../types'
 import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_STREAM_PARTIAL_IMAGES } from '../types'
 import { readRuntimeEnv } from './runtimeEnv'
@@ -433,6 +435,103 @@ export function isAmazonPlannerProfile(profile: Pick<ApiProfile, 'provider' | 'a
   return profile.provider === 'openai' && (profile.apiMode === 'responses' || profile.apiMode === 'chat')
 }
 
+function normalizeHexColor(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const trimmed = value.trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase()
+  if (/^[0-9a-fA-F]{6}$/.test(trimmed)) return `#${trimmed.toUpperCase()}`
+  return fallback
+}
+
+function normalizeStyleReferencePalette(value: unknown, fallback: string[] = []): string[] {
+  const base = fallback.length >= 6
+    ? fallback.slice(0, 6)
+    : [...fallback, '#FFFFFF', '#E5E7EB', '#111827', '#2563EB', '#16A34A', '#F97316'].slice(0, 6)
+  const source = Array.isArray(value) ? value : []
+  return Array.from({ length: 6 }, (_, index) => normalizeHexColor(source[index], base[index] ?? '#FFFFFF'))
+}
+
+function normalizeStyleText(value: unknown, fallback: string): string {
+  const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : ''
+  return text ? text.slice(0, 80) : fallback
+}
+
+function normalizeStyleReferenceEditState(value: unknown, fallback?: Partial<StyleReferenceEditState>): StyleReferenceEditState {
+  const record = isRecord(value) ? value : {}
+  return {
+    title: normalizeStyleText(record.title, fallback?.title ?? 'Custom style'),
+    palette: normalizeStyleReferencePalette(record.palette, fallback?.palette),
+    typography: normalizeStyleText(record.typography, fallback?.typography ?? 'Clean sans editorial'),
+    lighting: normalizeStyleText(record.lighting, fallback?.lighting ?? 'Soft balanced studio light'),
+    material: normalizeStyleText(record.material, fallback?.material ?? 'Smooth product-grade surfaces'),
+    density: record.density === 'minimal' || record.density === 'rich' ? record.density : fallback?.density ?? 'rich',
+  }
+}
+
+function normalizeCustomStyleReferences(value: unknown): CustomStyleReference[] {
+  if (!Array.isArray(value)) return []
+  const usedIds = new Set<string>()
+  return value
+    .map((item, index): CustomStyleReference | null => {
+      if (!isRecord(item)) return null
+      const editState = normalizeStyleReferenceEditState(item.editState, {
+        title: typeof item.title === 'string' ? item.title : undefined,
+      })
+      const rawId = typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `custom-style-${index + 1}`
+      const id = usedIds.has(rawId) ? `${rawId}-${index + 1}` : rawId
+      usedIds.add(id)
+      const imageId = typeof item.imageId === 'string' ? item.imageId.trim() : ''
+      const createdAt = typeof item.createdAt === 'number' && Number.isFinite(item.createdAt) ? item.createdAt : Date.now()
+      const updatedAt = typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt) ? item.updatedAt : createdAt
+      return {
+        id,
+        basePresetId: typeof item.basePresetId === 'string' && item.basePresetId.trim() ? item.basePresetId.trim() : null,
+        title: normalizeStyleText(item.title, editState.title),
+        editState,
+        imageId,
+        createdAt,
+        updatedAt,
+      }
+    })
+    .filter((item): item is CustomStyleReference => Boolean(item))
+}
+
+function getCustomStyleReferenceDedupKey(item: CustomStyleReference): string {
+  return JSON.stringify({
+    basePresetId: item.basePresetId ?? null,
+    title: item.title,
+    editState: item.editState,
+    imageId: item.imageId,
+  })
+}
+
+function createImportedCustomStyleReferenceId(baseId: string, usedIds: Set<string>): string {
+  const root = baseId.trim() || 'custom-style'
+  let index = 2
+  let candidate = `${root}-imported`
+  while (usedIds.has(candidate)) {
+    candidate = `${root}-imported-${index}`
+    index += 1
+  }
+  usedIds.add(candidate)
+  return candidate
+}
+
+function mergeImportedCustomStyleReferences(current: CustomStyleReference[], imported: CustomStyleReference[]): CustomStyleReference[] {
+  const usedIds = new Set(current.map((item) => item.id))
+  const existingKeys = new Set(current.map(getCustomStyleReferenceDedupKey))
+  const next = [...current]
+  for (const item of imported) {
+    const key = getCustomStyleReferenceDedupKey(item)
+    if (existingKeys.has(key)) continue
+    const id = usedIds.has(item.id) ? createImportedCustomStyleReferenceId(item.id, usedIds) : item.id
+    usedIds.add(id)
+    existingKeys.add(key)
+    next.push({ ...item, id })
+  }
+  return next
+}
+
 export function isOfficialDeepSeekPlannerProfile(profile: Pick<ApiProfile, 'provider' | 'baseUrl' | 'apiMode'>): boolean {
   if (profile.provider !== 'openai' || (profile.apiMode !== 'responses' && profile.apiMode !== 'chat')) return false
   const rawBaseUrl = profile.baseUrl.trim()
@@ -656,6 +755,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown, options
     profiles,
     activeProfileId,
     amazonPlannerProfileId,
+    customStyleReferences: normalizeCustomStyleReferences(record.customStyleReferences),
   }
 }
 
@@ -798,6 +898,7 @@ function isDefaultAmazonPlannerProfile(profile: ApiProfile): boolean {
 
 function hasOnlyDefaultProfiles(settings: AppSettings): boolean {
   return settings.customProviders.length === 0 &&
+    settings.customStyleReferences.length === 0 &&
     settings.profiles.length === 2 &&
     settings.activeProfileId === DEFAULT_OPENAI_PROFILE_ID &&
     settings.amazonPlannerProfileId === DEFAULT_AMAZON_PLANNER_PROFILE_ID &&
@@ -922,6 +1023,7 @@ export function mergeImportedSettings(currentSettings: Partial<AppSettings> | un
   const usedIds = new Set(current.profiles.map((profile) => profile.id))
   const existingKeys = new Set(current.profiles.map(getApiProfileDedupKey))
   const { providers: customProviders, providerIdMap } = mergeImportedCustomProviders(current.customProviders, imported.customProviders)
+  const customStyleReferences = mergeImportedCustomStyleReferences(current.customStyleReferences, imported.customStyleReferences)
   const importedProfiles = imported.profiles
     .map((profile) => providerIdMap.has(profile.provider)
       ? { ...profile, provider: providerIdMap.get(profile.provider) ?? profile.provider }
@@ -937,6 +1039,7 @@ export function mergeImportedSettings(currentSettings: Partial<AppSettings> | un
   return normalizeSettings({
     ...current,
     customProviders,
+    customStyleReferences,
     profiles,
     activeProfileId: current.activeProfileId,
   })
@@ -962,6 +1065,7 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   agentScrollToBottomAfterSubmit: true,
   agentMaxToolRounds: DEFAULT_AGENT_MAX_TOOL_ROUNDS,
   agentWebSearch: false,
+  customStyleReferences: [],
   profiles: createDefaultProfilePair(),
   activeProfileId: DEFAULT_OPENAI_PROFILE_ID,
   amazonPlannerProfileId: DEFAULT_AMAZON_PLANNER_PROFILE_ID,

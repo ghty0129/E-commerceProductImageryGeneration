@@ -209,19 +209,19 @@ function formatPromptBlock(options: {
   seriesStyleGuide?: string | null
   styleReferenceAttached?: boolean
   styleDensityMode?: AmazonStyleDensityMode
-  selectedStylePreset?: {
+  selectedVisualStyle?: {
     label: string
     description: string
     palette: string[]
   } | null
 }) {
-  const selectedStylePreset = options.styleReferenceAttached ? options.selectedStylePreset : null
-  const selectedStyleBlock = selectedStylePreset
+  const selectedVisualStyle = options.styleReferenceAttached ? options.selectedVisualStyle : null
+  const selectedStyleBlock = selectedVisualStyle
     ? [
       'Selected visual style (highest priority):',
-      `- Style preset: ${selectedStylePreset.label}.`,
-      `- Style direction: ${selectedStylePreset.description}`,
-      selectedStylePreset.palette.length ? `- Palette anchors: ${selectedStylePreset.palette.join(', ')}.` : '',
+      `- Style reference: ${selectedVisualStyle.label}.`,
+      `- Style direction: ${selectedVisualStyle.description}`,
+      selectedVisualStyle.palette.length ? `- Palette anchors: ${selectedVisualStyle.palette.join(', ')}.` : '',
       '- This selected visual style is the highest-priority visual system for background, palette, typography, lighting, decorative accents, material finish, and information-panel styling.',
       '- If the image task prompt or Series style guide contains a conflicting aesthetic, background mood, color palette, typography direction, or decorative accent, override that conflict with this selected visual style while preserving product facts and required copy.',
     ].filter(Boolean).join('\n')
@@ -249,7 +249,7 @@ export function buildAmazonPlanPrompt(plan: Pick<AmazonImagePlan, 'prompt' | 'ne
   seriesStyleGuide?: string | null
   styleReferenceAttached?: boolean
   styleDensityMode?: AmazonStyleDensityMode
-  selectedStylePreset?: {
+  selectedVisualStyle?: {
     label: string
     description: string
     palette: string[]
@@ -366,7 +366,7 @@ export function buildAmazonAPlusPlanPrompt(plan: Pick<AmazonAPlusPlan, 'prompt' 
   seriesStyleGuide?: string | null
   styleReferenceAttached?: boolean
   styleDensityMode?: AmazonStyleDensityMode
-  selectedStylePreset?: {
+  selectedVisualStyle?: {
     label: string
     description: string
     palette: string[]

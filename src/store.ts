@@ -2021,7 +2021,7 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
     }
     const dataUrl = await ensureImageCached(styleReferenceImageId)
     if (!dataUrl) {
-      showToast('已选择的预设风格参考图不存在，请重新选择预设风格。', 'error')
+      showToast('已选择的风格参考图不存在，请重新选择风格参考。', 'error')
       return false
     }
     orderedInputImages = [...orderedInputImages, { id: styleReferenceImageId, dataUrl }]

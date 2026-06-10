@@ -102,6 +102,7 @@ export interface AppSettings {
   profiles: ApiProfile[]
   activeProfileId: string
   amazonPlannerProfileId: string
+  customStyleReferences: CustomStyleReference[]
 }
 
 // ===== 任务参数 =====
@@ -279,6 +280,25 @@ export interface AmazonPlannerSessionStyleImage {
 
 export type AmazonStyleDensityMode = 'rich' | 'minimal'
 
+export interface StyleReferenceEditState {
+  title: string
+  palette: string[]
+  typography: string
+  lighting: string
+  material: string
+  density: AmazonStyleDensityMode
+}
+
+export interface CustomStyleReference {
+  id: string
+  basePresetId?: string | null
+  title: string
+  editState: StyleReferenceEditState
+  imageId: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface AmazonPlannerSession {
   id: string
   title: string
@@ -297,6 +317,8 @@ export interface AmazonPlannerSession {
   selectedStyleIndex: number | null
   selectedStylePresetId?: string | null
   selectedStyleReferenceImageId?: string | null
+  selectedCustomStyleReferenceId?: string | null
+  selectedCustomStyleReferenceSnapshot?: CustomStyleReference | null
   styleDensityMode?: AmazonStyleDensityMode
   imagePlans: AmazonPlannerSessionImagePlan[]
   aPlusPlans: AmazonPlannerSessionAPlusPlan[]
@@ -359,8 +381,8 @@ export interface StoredImage {
   dataUrl: string
   /** 图片首次存储时间（ms） */
   createdAt?: number
-  /** 图片来源：用户上传 / API 生成 / 遮罩 */
-  source?: 'upload' | 'generated' | 'mask' | 'preset'
+  /** 图片来源：用户上传 / API 生成 / 遮罩 / 风格参考 */
+  source?: 'upload' | 'generated' | 'mask' | 'preset' | 'style-custom'
   /** 原图宽度 */
   width?: number
   /** 原图高度 */
@@ -505,7 +527,7 @@ export interface ExportData {
   imageFiles?: Record<string, {
     path: string
     createdAt?: number
-    source?: 'upload' | 'generated' | 'mask' | 'preset'
+    source?: 'upload' | 'generated' | 'mask' | 'preset' | 'style-custom'
     width?: number
     height?: number
   }>

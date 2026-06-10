@@ -106,6 +106,59 @@ describe('mergeImportedSettings', () => {
     expect(settings.model).toBe(DEFAULT_IMAGES_MODEL)
   })
 
+  it('normalizes and merges custom style references from imported settings', () => {
+    const current = normalizeSettings({
+      customStyleReferences: [
+        {
+          id: 'style-a',
+          basePresetId: 'clean-tech',
+          title: 'Local style',
+          editState: {
+            title: 'Local style',
+            palette: ['#FFFFFF', '#E5E7EB', '#111827', '#2563EB', '#16A34A', '#F97316'],
+            typography: 'Clean sans',
+            lighting: 'Soft light',
+            material: 'Smooth panels',
+            density: 'rich',
+          },
+          imageId: 'local-style-image',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    })
+
+    const merged = mergeImportedSettings(current, {
+      customStyleReferences: [
+        {
+          id: 'style-a',
+          basePresetId: 'bright-retail',
+          title: 'Imported style',
+          editState: {
+            title: 'Imported style',
+            palette: ['ffffff', '#FEF3C7', '#F97316', '#2563EB', '#16A34A', '#111827'],
+            typography: 'Retail sans',
+            lighting: 'Bright light',
+            material: 'Gloss panels',
+            density: 'minimal',
+          },
+          imageId: 'imported-style-image',
+          createdAt: 2,
+          updatedAt: 2,
+        },
+      ],
+    })
+
+    expect(merged.customStyleReferences).toHaveLength(2)
+    expect(merged.customStyleReferences[0]?.id).toBe('style-a')
+    expect(merged.customStyleReferences[1]).toMatchObject({
+      id: 'style-a-imported',
+      title: 'Imported style',
+      imageId: 'imported-style-image',
+    })
+    expect(merged.customStyleReferences[1]?.editState.palette[0]).toBe('#FFFFFF')
+  })
+
   it('replaces the default OpenAI profile with legacy imported settings when current settings are untouched', () => {
     const merged = mergeImportedSettings(DEFAULT_SETTINGS, {
       baseUrl: 'https://api.example.com/v1',

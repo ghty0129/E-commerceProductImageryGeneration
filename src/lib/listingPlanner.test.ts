@@ -54,14 +54,14 @@ describe('Amazon prompt builders', () => {
     expect(prompt).not.toContain('A+ module requirements:')
   })
 
-  it('prioritizes the selected style preset over conflicting series style language', () => {
+  it('prioritizes the selected visual style over conflicting series style language', () => {
     const prompt = buildAmazonPlanPrompt({
       prompt: 'Create an Amazon secondary infographic image of the exact product.',
       negativePrompt: 'price, reviews',
       seriesStyleGuide: 'Use warm cream backgrounds, botanical accents, and coastal resort styling.',
       styleReferenceAttached: true,
       styleDensityMode: 'rich',
-      selectedStylePreset: {
+      selectedVisualStyle: {
         label: '清爽科技',
         description: '冷色光感、干净层级、精准标注，适合电子、工具、办公类产品。',
         palette: ['#F8FAFC', '#38BDF8', '#14B8A6'],
@@ -69,7 +69,7 @@ describe('Amazon prompt builders', () => {
     })
 
     expect(prompt).toContain('Selected visual style (highest priority):')
-    expect(prompt).toContain('Style preset: 清爽科技.')
+    expect(prompt).toContain('Style reference: 清爽科技.')
     expect(prompt).toContain('冷色光感、干净层级、精准标注')
     expect(prompt).toContain('Palette anchors: #F8FAFC, #38BDF8, #14B8A6.')
     expect(prompt).toContain('highest-priority visual system')
@@ -133,20 +133,20 @@ describe('Amazon prompt builders', () => {
     expect(prompt).not.toContain('The last input image is a hidden style reference')
   })
 
-  it('applies selected style preset priority to A+ prompts', () => {
+  it('applies selected visual style priority to A+ prompts', () => {
     const prompt = buildAmazonAPlusPlanPrompt({
       prompt: 'A+ module with feature callouts.',
       negativePrompt: 'pricing, reviews',
       seriesStyleGuide: 'Use warm tan backgrounds.',
       styleReferenceAttached: true,
-      selectedStylePreset: {
+      selectedVisualStyle: {
         label: '明亮零售',
         description: '明快色块、清晰卖点区域、购物页友好，适合快消、厨房、运动配件。',
         palette: ['#FFFFFF', '#F97316', '#2563EB'],
       },
     })
 
-    expect(prompt).toContain('Style preset: 明亮零售.')
+    expect(prompt).toContain('Style reference: 明亮零售.')
     expect(prompt).toContain('Palette anchors: #FFFFFF, #F97316, #2563EB.')
     expect(prompt).toContain('Series style guide (lower priority than the selected visual style):')
   })

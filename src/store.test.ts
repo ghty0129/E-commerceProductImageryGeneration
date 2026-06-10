@@ -888,6 +888,42 @@ describe('data import', () => {
     expect(await getAllAmazonPlannerSessions()).toEqual([session])
     expect(useStore.getState().showToast).toHaveBeenCalledWith('已导入 0 条记录和 1 条策划历史', 'success')
   })
+
+  it('imports custom style references with config data', async () => {
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+
+    const imported = await importData(importFile({
+      version: 4,
+      exportedAt: new Date(0).toISOString(),
+      settings: normalizeSettings({
+        customStyleReferences: [
+          {
+            id: 'custom-style-a',
+            basePresetId: 'clean-tech',
+            title: 'Custom clean style',
+            editState: {
+              title: 'Custom clean style',
+              palette: ['#FFFFFF', '#E5E7EB', '#111827', '#2563EB', '#16A34A', '#F97316'],
+              typography: 'Clean sans',
+              lighting: 'Soft light',
+              material: 'Satin panels',
+              density: 'rich',
+            },
+            imageId: 'custom-style-image',
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      }),
+    }), { importConfig: true, importTasks: false })
+
+    expect(imported).toBe(true)
+    expect(useStore.getState().settings.customStyleReferences).toHaveLength(1)
+    expect(useStore.getState().settings.customStyleReferences[0]).toMatchObject({
+      id: 'custom-style-a',
+      imageId: 'custom-style-image',
+    })
+  })
 })
 
 describe('data export and clearing', () => {
@@ -946,6 +982,66 @@ describe('data export and clearing', () => {
     expect(manifest.imageFiles).toHaveProperty('style-image-a')
     expect(manifest.imageFiles?.['preset-style-image']?.source).toBe('preset')
     expect(clickedDownloads[0]?.download).toContain('amazon-image-studio-backup')
+
+    createObjectUrl.mockRestore()
+    revokeObjectUrl.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  it('exports custom style library config and referenced custom style images', async () => {
+    const customStyle = {
+      id: 'custom-style-a',
+      basePresetId: 'clean-tech',
+      title: 'Custom clean style',
+      editState: {
+        title: 'Custom clean style',
+        palette: ['#FFFFFF', '#E5E7EB', '#111827', '#2563EB', '#16A34A', '#F97316'],
+        typography: 'Clean sans',
+        lighting: 'Soft light',
+        material: 'Satin panels',
+        density: 'rich' as const,
+      },
+      imageId: 'custom-style-image',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_100,
+    }
+    const session = amazonPlannerSession({
+      id: 'custom-style-session',
+      selectedStylePresetId: 'clean-tech',
+      selectedStyleReferenceImageId: customStyle.imageId,
+      selectedCustomStyleReferenceId: customStyle.id,
+      selectedCustomStyleReferenceSnapshot: customStyle,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        customStyleReferences: [customStyle],
+      }),
+    })
+    await putAmazonPlannerSession(session)
+    await putImage({ id: customStyle.imageId, dataUrl: 'data:image/png;base64,Yw==', createdAt: 1_700_000_000_000, source: 'style-custom' })
+
+    const anchor = { href: '', download: '', click: vi.fn() }
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => anchor),
+    })
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:backup')
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
+    await exportData({ exportConfig: true, exportTasks: true })
+
+    const blob = createObjectUrl.mock.calls[0]?.[0] as Blob
+    const buffer = await blob.arrayBuffer()
+    const unzipped = unzipSync(new Uint8Array(buffer))
+    const manifest = JSON.parse(strFromU8(unzipped['manifest.json'])) as ExportData
+    expect(manifest.settings?.customStyleReferences).toEqual([customStyle])
+    expect(manifest.amazonPlannerSessions?.[0]).toMatchObject({
+      selectedCustomStyleReferenceId: customStyle.id,
+      selectedStyleReferenceImageId: customStyle.imageId,
+    })
+    expect(manifest.imageFiles?.[customStyle.imageId]?.source).toBe('style-custom')
 
     createObjectUrl.mockRestore()
     revokeObjectUrl.mockRestore()
