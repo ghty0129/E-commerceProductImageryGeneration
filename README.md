@@ -6,6 +6,16 @@
 
 项目仓库：[Ali-Aria/amazon-image-studio](https://github.com/Ali-Aria/amazon-image-studio)
 
+## 开源说明
+
+本仓库公开的是前端应用源码、Amazon 图片策划逻辑、Prompt 模板、知识文档、本地启动脚本和部署配置，采用 [MIT License](LICENSE) 发布。
+
+需要注意：
+
+- Codex / Claude Code / OpenClaw 只是可选的安装助手，不是项目运行依赖；不用 AI 编程工具也可以按下面的手动方式本地运行。
+- 在线体验和本地应用都不会内置 API Key。生成图片和 AI 策划需要使用者填写自己的 OpenAI 或兼容接口 Key，并自行承担调用费用。
+- `package.json` 中的 `"private": true` 仅用于防止误发布到 npm，不代表 GitHub 仓库私有，也不影响源码开源。
+
 ## 更新日志
 
 按自然周（周一至周日）整理，最新一周在最上方。每个周块可展开查看本周推送内容，提交号用于回溯具体改动。
@@ -70,6 +80,7 @@
 ## 在线体验
 
 - 体验地址：[https://ali-aria.github.io/amazon-image-studio/](https://ali-aria.github.io/amazon-image-studio/)
+- 打开在线体验不需要 Codex；Codex 只是一种可选的本地安装方式。
 - 在线体验不会内置 API Key；生成图片和 AI 策划都需要在右上角设置中填写你自己的 OpenAI 或兼容接口 Key。
 - API Key 保存在当前浏览器本地，不会提交到仓库；如果线上页面加载异常，也可以按下面的“启动项目”在本地运行。
 - 💡 提示：若需调用非 HTTPS 的内网或本地 HTTP API，请使用 GitHub Pages 版本或自行部署，Vercel 部署的体验版绑定的 .dev 域名因安全策略通常要求接口必须为 HTTPS。
@@ -400,6 +411,8 @@ npm run build
 如果要让 Vercel 在每次 push 后自动部署，请删除这段配置，或把 `deploymentEnabled` 改为 `true`。如果继续保留它，可以使用 `.github/workflows/vercel-tag-deploy.yml` 中的 Deploy Hook 方式，并在 GitHub Secrets 里配置 `VERCEL_DEPLOY_HOOK`。
 
 ## 许可与来源
+
+本项目源码以 [MIT License](LICENSE) 发布。开源范围包括前端源码、Prompt 模板、内置知识文档、本地启动脚本和部署配置；不包含 OpenAI、ChatGPT、Codex 或任何第三方模型服务本身，也不附带 API Key 或免费调用额度。
 
 本项目基于 MIT 许可的 [GPT Image Playground](https://github.com/CookSleep/gpt_image_playground) 修改，原作者为 CookSleep。
 

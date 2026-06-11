@@ -1,7 +1,17 @@
 {
   "name": "amazon-image-studio",
+  "description": "Amazon Listing image planning and generation workspace.",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ali-Aria/amazon-image-studio.git"
+  },
+  "homepage": "https://ali-aria.github.io/amazon-image-studio/",
+  "bugs": {
+    "url": "https://github.com/Ali-Aria/amazon-image-studio/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
