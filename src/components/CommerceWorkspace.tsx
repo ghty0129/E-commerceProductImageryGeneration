@@ -25,13 +25,12 @@ function loadFactCard() {
 
 export function CreationModeTabs({ activeMode, onChange }: { activeMode: CreationMode; onChange: (mode: CreationMode) => void }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-3" role="tablist" aria-label="创作模式">
+    <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="创作模式">
       {CREATION_MODES.map((policy) => (
         <button
           key={policy.mode}
           type="button"
-          role="tab"
-          aria-selected={activeMode === policy.mode}
+          aria-pressed={activeMode === policy.mode}
           onClick={() => onChange(policy.mode)}
           className={`rounded-xl border px-4 py-3 text-left transition ${activeMode === policy.mode ? 'border-blue-300 bg-blue-50 text-blue-800 ring-2 ring-blue-500/15 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-100' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-white/[0.06]'}`}
         >
@@ -80,16 +79,13 @@ function ModeRules({ mode }: { mode: CreationMode }) {
   )
 }
 
-function GenericModePanel({ workspace, setWorkspace, onOpenFacts, factsRevision }: {
+export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard }: {
+  mode: 'universal' | 'free'
   workspace: CreationWorkspace
   setWorkspace: React.Dispatch<React.SetStateAction<CreationWorkspace>>
   onOpenFacts: () => void
-  factsRevision: number
+  factCard: ProductFactCard | null
 }) {
-  const mode = workspace.activeMode === 'free' ? 'free' : 'universal'
-  const [factCard, setFactCard] = useState<ProductFactCard | null>(loadFactCard)
-  useEffect(() => setFactCard(loadFactCard()), [mode, factsRevision])
-
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -128,7 +124,7 @@ function GenericModePanel({ workspace, setWorkspace, onOpenFacts, factsRevision 
 export default function CommerceWorkspace() {
   const [workspace, setWorkspace] = useState<CreationWorkspace>(loadInitialWorkspace)
   const [showProductFactsAssistant, setShowProductFactsAssistant] = useState(false)
-  const [factsRevision, setFactsRevision] = useState(0)
+  const [factCard, setFactCard] = useState<ProductFactCard | null>(loadFactCard)
   const settings = useStore((state) => state.settings)
   const inputImages = useStore((state) => state.inputImages)
   const setShowSettings = useStore((state) => state.setShowSettings)
@@ -143,9 +139,23 @@ export default function CommerceWorkspace() {
         <div className="mb-3"><h1 className="text-lg font-bold text-gray-900 dark:text-white">选择创作模式</h1><p className="mt-1 text-xs text-gray-500">不同模式使用独立规则和草稿，切换不会覆盖其他模式内容。</p></div>
         <CreationModeTabs activeMode={workspace.activeMode} onChange={(activeMode) => setWorkspace((current) => ({ ...current, activeMode }))} />
       </section>
-      {workspace.activeMode === 'amazon'
-        ? <AmazonPlanner />
-        : <GenericModePanel workspace={workspace} setWorkspace={setWorkspace} onOpenFacts={() => setShowProductFactsAssistant(true)} factsRevision={factsRevision} />}
+      {workspace.activeMode === 'amazon' ? (
+        <>
+          <section className="mt-4 grid gap-4 lg:grid-cols-2">
+            <ProductFactsSummary card={factCard} />
+            <ModeRules mode="amazon" />
+          </section>
+          <AmazonPlanner />
+        </>
+      ) : (
+        <CreationModeFoundationPanel
+          mode={workspace.activeMode}
+          workspace={workspace}
+          setWorkspace={setWorkspace}
+          onOpenFacts={() => setShowProductFactsAssistant(true)}
+          factCard={factCard}
+        />
+      )}
       {showProductFactsAssistant ? (
         <ProductFactsAssistantModal
           profile={profile}
@@ -153,7 +163,7 @@ export default function CommerceWorkspace() {
           referenceImageDataUrls={inputImages.map((image) => image.dataUrl)}
           showAmazonApply={false}
           onApplyAmazonCopy={() => undefined}
-          onClose={() => { setShowProductFactsAssistant(false); setFactsRevision((value) => value + 1) }}
+          onClose={() => { setShowProductFactsAssistant(false); setFactCard(loadFactCard()) }}
           onOpenApiSettings={() => { setShowProductFactsAssistant(false); setShowSettings(true, 'api') }}
         />
       ) : null}
