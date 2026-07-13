@@ -262,12 +262,23 @@ describe('mask draft lifecycle in store actions', () => {
   })
 
   it('shows a submitted toast after creating a gallery task', async () => {
-    const submitted = await submitTask()
+    let createdTaskId = ''
+    const submitted = await submitTask({ onTaskCreated: (taskId) => { createdTaskId = taskId } })
 
     const state = useStore.getState()
     expect(submitted).toBe(true)
     expect(state.tasks).toHaveLength(1)
+    expect(createdTaskId).toBe(state.tasks[0]?.id)
     expect(state.showToast).toHaveBeenCalledWith('任务已提交', 'success')
+  })
+
+  it('uses persisted image ids for an isolated batch snapshot', async () => {
+    const submitted = await submitTask({
+      snapshot: { prompt: 'batch image', inputImages: [imageA], params: { ...DEFAULT_PARAMS }, pendingTaskCategory: null },
+    })
+
+    expect(submitted).toBe(true)
+    expect(useStore.getState().tasks[0]?.inputImageIds[0]).toMatch(/^stored-image-/)
   })
 
   it.each([
