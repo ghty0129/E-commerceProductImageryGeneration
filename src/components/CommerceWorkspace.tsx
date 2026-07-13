@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AmazonPlanner from './AmazonPlanner'
 import ProductFactsAssistantModal from './ProductFactsAssistantModal'
 import PromptStructurePreview from './PromptStructurePreview'
+import FlexiblePlanEditor from './FlexiblePlanEditor'
 import { useStore } from '../store'
 import { getAmazonPlannerProfile, validateApiProfile } from '../lib/apiProfiles'
 import { CREATION_MODES, getCreationModePolicy, type CreationMode } from '../lib/creationModes'
@@ -15,6 +16,8 @@ import {
   savePromptRequirementWorkspace,
   type PromptRequirementWorkspace,
 } from '../lib/promptRequirementsWorkspace'
+import { createEmptyFlexiblePlanWorkspace, loadFlexiblePlanWorkspace, saveFlexiblePlanWorkspace, type FlexiblePlanWorkspace } from '../lib/flexiblePlanWorkspace'
+import type { ImageSetPlan } from '../lib/imageSetPlan'
 
 const FIELD_CLASS = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
 
@@ -86,7 +89,7 @@ function ModeRules({ mode }: { mode: CreationMode }) {
   )
 }
 
-export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt }: {
+export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange }: {
   mode: 'universal' | 'free'
   workspace: CreationWorkspace
   setWorkspace: React.Dispatch<React.SetStateAction<CreationWorkspace>>
@@ -95,6 +98,8 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
   globalRequirements: string
   onGlobalRequirementsChange: (value: string) => void
   compiledPrompt: CompiledImagePrompt
+  flexiblePlan?: ImageSetPlan
+  onFlexiblePlanChange?: (plan: ImageSetPlan) => void
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950 sm:p-5">
@@ -127,6 +132,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
         </div>
         <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} /></div>
       </div>
+      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} /> : null}
     </section>
   )
 }
@@ -134,6 +140,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
 export default function CommerceWorkspace() {
   const [workspace, setWorkspace] = useState<CreationWorkspace>(loadInitialWorkspace)
   const [promptRequirements, setPromptRequirements] = useState<PromptRequirementWorkspace>(loadInitialPromptRequirements)
+  const [flexiblePlans, setFlexiblePlans] = useState<FlexiblePlanWorkspace>(() => typeof window === 'undefined' ? createEmptyFlexiblePlanWorkspace() : loadFlexiblePlanWorkspace(window.localStorage))
   const [showProductFactsAssistant, setShowProductFactsAssistant] = useState(false)
   const [factCard, setFactCard] = useState<ProductFactCard | null>(loadFactCard)
   const settings = useStore((state) => state.settings)
@@ -144,6 +151,7 @@ export default function CommerceWorkspace() {
 
   useEffect(() => saveCreationWorkspace(window.localStorage, workspace), [workspace])
   useEffect(() => savePromptRequirementWorkspace(window.localStorage, promptRequirements), [promptRequirements])
+  useEffect(() => saveFlexiblePlanWorkspace(window.localStorage, flexiblePlans), [flexiblePlans])
 
   const confirmedProductFacts = useMemo(() => factCard ? buildConfirmedProductFactsText(factCard) : '', [factCard])
   const genericMode = workspace.activeMode === 'free' ? 'free' : 'universal'
@@ -180,7 +188,9 @@ export default function CommerceWorkspace() {
             setPromptRequirements((current) => ({ ...current, [mode]: { ...current[mode], globalRequirements } }))
             setWorkspace((current) => ({ ...current, [mode]: { ...current[mode], globalRequirements } }))
           }}
-          compiledPrompt={currentGenericPrompt} />
+          compiledPrompt={currentGenericPrompt}
+          flexiblePlan={flexiblePlans[workspace.activeMode]}
+          onFlexiblePlanChange={(plan) => setFlexiblePlans((current) => ({ ...current, [workspace.activeMode]: plan }))} />
       )}
       {showProductFactsAssistant ? <ProductFactsAssistantModal profile={profile} profileError={profileError} referenceImageDataUrls={inputImages.map((image) => image.dataUrl)} showAmazonApply={false} onApplyAmazonCopy={() => undefined}
         onClose={() => { setShowProductFactsAssistant(false); setFactCard(loadFactCard()) }} onOpenApiSettings={() => { setShowProductFactsAssistant(false); setShowSettings(true, 'api') }} /> : null}
