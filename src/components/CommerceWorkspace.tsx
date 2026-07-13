@@ -132,7 +132,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
         </div>
         <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} /></div>
       </div>
-      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} /> : null}
+      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} /> : null}
     </section>
   )
 }

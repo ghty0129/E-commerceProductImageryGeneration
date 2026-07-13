@@ -1,13 +1,20 @@
-import { addPlannedImage, confirmImageSetPlan, copyPlannedImage, deletePlannedImage, isImageSetPlanConfirmed, movePlannedImage, selectPlannedImage, updatePlannedImage, type ImageSetPlan, type PlannedImage } from '../lib/imageSetPlan'
+import { addPlannedImage, createImageSetPlan as createPlan, confirmImageSetPlan, copyPlannedImage, deletePlannedImage, isImageSetPlanConfirmed, movePlannedImage, selectPlannedImage, updatePlannedImage, type ImageSetPlan, type PlannedImage } from '../lib/imageSetPlan'
 
 const field = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-gray-950 dark:text-white'
 
-export default function FlexiblePlanEditor({ plan, onChange }: { plan: ImageSetPlan; onChange: (plan: ImageSetPlan) => void }) {
+export default function FlexiblePlanEditor({ plan, onChange, requestedCount = 4, description = '' }: { plan: ImageSetPlan; onChange: (plan: ImageSetPlan) => void; requestedCount?: number; description?: string }) {
   const selected = plan.images.find((image) => image.id === plan.selectedImageId) ?? plan.images[0]
   const update = (changes: Partial<Omit<PlannedImage, 'id'>>) => onChange(updatePlannedImage(plan, selected.id, changes))
   const newId = () => `${plan.mode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const autoPlan = () => {
+    const count = Math.min(12, Math.max(1, requestedCount))
+    const purposes = ['商品主视觉', '使用场景', '核心细节', '竖版海报', '卖点展示', '尺寸信息', '包装清单', '对比展示']
+    let next = createPlan(plan.mode, count, (index) => `${plan.mode}-auto-${Date.now()}-${index}`)
+    next = { ...next, images: next.images.map((image, index) => ({ ...image, purpose: purposes[index % purposes.length], goal: description, aspectRatio: purposes[index % purposes.length] === '竖版海报' ? '9:16' : '1:1' })) }
+    onChange(next)
+  }
   return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
-    <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-bold">逐图方案 · {plan.images.length} 张</div><div className="text-xs text-gray-500">每张图可以独立设置用途、比例、文案和要求。</div></div><div className="flex gap-2"><button disabled={plan.images.length >= 12} onClick={() => onChange(addPlannedImage(plan, newId))} className="rounded-lg bg-gray-900 px-3 py-2 text-xs text-white">新增图片</button><button onClick={() => onChange(confirmImageSetPlan(plan))} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white">确认整套方案</button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-bold">逐图方案 · {plan.images.length} 张</div><div className="text-xs text-gray-500">每张图可以独立设置用途、比例、文案和要求。</div></div><div className="flex gap-2"><button onClick={autoPlan} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white">按描述生成方案</button><button disabled={plan.images.length >= 12} onClick={() => onChange(addPlannedImage(plan, newId))} className="rounded-lg bg-gray-900 px-3 py-2 text-xs text-white">新增图片</button><button onClick={() => onChange(confirmImageSetPlan(plan))} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white">确认整套方案</button></div></div>
     <div className="mt-3 flex gap-2 overflow-x-auto">{plan.images.map((image, index) => <button key={image.id} onClick={() => onChange(selectPlannedImage(plan, image.id))} className={`min-w-36 rounded-lg border p-2 text-left text-xs ${image.id === selected.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}><b>{index + 1}. {image.purpose}</b><span className="mt-1 block text-gray-500">{image.aspectRatio} · {image.resolution}</span></button>)}</div>
     <div className="mt-3 grid gap-3 sm:grid-cols-2">
       <label className="text-xs">图片用途<input aria-label="图片用途" className={field} value={selected.purpose} onChange={(e) => update({ purpose: e.target.value })} /></label>
