@@ -173,11 +173,11 @@ export default function CommerceWorkspace() {
     setInputImages((slot.referenceImages ?? []).map((dataUrl, index) => ({ id: `${slot.id}-reference-${index}`, dataUrl })))
     showToast(`已载入 ${slot.name}，请检查右侧提示词后生成`, 'success')
   }
-  const submitBatchProject = async (slot: BatchProjectSlot, onTaskCreated: (taskId: string, imageIndex: number) => void) => {
+  const submitBatchProject = async (slot: BatchProjectSlot, imageIndexes: number[], onTaskCreated: (taskId: string, imageIndex: number) => void) => {
     if (!slot.plannedImages?.length) throw new Error('项目尚未生成逐图方案')
     const baseParams = useStore.getState().params
     const inputImages = (slot.referenceImages ?? []).map((dataUrl, index) => ({ id: `${slot.id}-reference-${index}`, dataUrl }))
-    const results = await runBoundedProjectQueue(slot.plannedImages.map((image, index) => ({ image, index })), async ({ image, index }) => {
+    const results = await runBoundedProjectQueue(imageIndexes.map((index) => ({ image: slot.plannedImages[index], index })), async ({ image, index }) => {
       const prompt = [slot.description, slot.requirements, `Image ${index + 1}: ${image.purpose}`, image.goal, 'Keep confirmed product appearance accurate. Do not copy third-party branding, wording, fixed layouts, or people poses.'].filter(Boolean).join('\n\n')
       let taskId = ''
       const submitted = await submitTask({

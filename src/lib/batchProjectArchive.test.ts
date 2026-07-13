@@ -6,7 +6,7 @@ describe('batch project archive', () => {
     const files = await createBatchProjectArchiveFiles({
       project: {
         id: 'project-1', name: 'Bottle', sku: 'SKU-1', description: 'Steel bottle', requirements: '',
-        imageCount: 1, referenceImages: ['data:image/png;base64,AQ=='], plannedImages: [], taskIds: ['task-1'], status: 'done',
+        imageCount: 1, referenceImages: ['data:image/png;base64,AQ=='], plannedImages: [], taskLinks: [{ imageIndex: 0, taskId: 'task-1' }], status: 'done',
       },
       tasks: [{ id: 'task-1', status: 'done', outputImages: ['output-1'] }],
       resolveImage: async (id) => id === 'output-1' ? 'data:image/webp;base64,Ag==' : '',

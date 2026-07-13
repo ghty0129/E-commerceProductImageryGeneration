@@ -1,7 +1,8 @@
 import { strToU8 } from 'fflate'
+import type { TaskStatus } from '../types'
 import type { BatchProjectSlot } from './batchProjectTasks'
 
-type ArchiveTask = { id: string; status: string; outputImages: string[]; error?: string | null }
+type ArchiveTask = { id: string; status: TaskStatus; outputImages: string[]; error?: string | null }
 
 function decodeDataUrl(dataUrl: string | undefined): { bytes: Uint8Array; extension: string } | null {
   if (!dataUrl) return null
@@ -21,7 +22,7 @@ export async function createBatchProjectArchiveFiles({
   tasks: ArchiveTask[]
   resolveImage: (imageId: string) => Promise<string | undefined>
 }): Promise<Record<string, Uint8Array>> {
-  const linkedTasks = project.taskIds.filter(Boolean).map((id) => tasks.find((task) => task.id === id)).filter(Boolean) as ArchiveTask[]
+  const linkedTasks = [...project.taskLinks].sort((a, b) => a.imageIndex - b.imageIndex).map((link) => tasks.find((task) => task.id === link.taskId)).filter(Boolean) as ArchiveTask[]
   const files: Record<string, Uint8Array> = {
     'project.json': strToU8(JSON.stringify({ ...project, referenceImages: undefined, tasks: linkedTasks }, null, 2)),
     'README.txt': strToU8('项目资料、逐图方案、参考图和生成结果。上架前仍需人工复核素材授权、文字准确性和平台规则。'),
