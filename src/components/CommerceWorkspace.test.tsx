@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import CommerceWorkspace, { CreationModeFoundationPanel, CreationModeTabs } from './CommerceWorkspace'
 import { createEmptyCreationWorkspace } from '../lib/creationWorkspace'
 import { normalizeProductFactCard } from '../lib/productFacts'
+import { compileImagePrompt } from '../lib/promptCompiler'
 
 describe('CreationModeTabs', () => {
-  it('exposes all three creation modes as accessible tabs', () => {
+  it('exposes all three creation modes as accessible buttons', () => {
     const markup = renderToStaticMarkup(<CreationModeTabs activeMode="universal" onChange={() => undefined} />)
 
     expect(markup).toContain('Amazon合规')
@@ -24,21 +25,21 @@ describe('CreationModeTabs', () => {
     expect(markup).toContain('Amazon主图禁止水印')
   })
 
-  it('shows isolated universal and free drafts without Amazon watermark rules', () => {
+  it('shows isolated universal and free requirements with structured previews', () => {
     const workspace = createEmptyCreationWorkspace()
     workspace.universal.platform = 'Walmart'
-    workspace.universal.globalRequirements = 'Universal draft text'
-    workspace.free.globalRequirements = 'Free draft text'
     const factCard = normalizeProductFactCard({ confirmedFacts: [{ label: 'Material', value: 'Polyester' }] })
     const setWorkspace = () => undefined
-    const universalMarkup = renderToStaticMarkup(<CreationModeFoundationPanel mode="universal" workspace={workspace} setWorkspace={setWorkspace} onOpenFacts={() => undefined} factCard={factCard} />)
-    const freeMarkup = renderToStaticMarkup(<CreationModeFoundationPanel mode="free" workspace={workspace} setWorkspace={setWorkspace} onOpenFacts={() => undefined} factCard={factCard} />)
+    const common = { workspace, setWorkspace, onOpenFacts: () => undefined, factCard, onGlobalRequirementsChange: () => undefined }
+    const universalMarkup = renderToStaticMarkup(<CreationModeFoundationPanel {...common} mode="universal" globalRequirements="Universal draft text" compiledPrompt={compileImagePrompt({ mode: 'universal', globalRequirements: 'Universal draft text' })} />)
+    const freeMarkup = renderToStaticMarkup(<CreationModeFoundationPanel {...common} mode="free" globalRequirements="Free draft text" compiledPrompt={compileImagePrompt({ mode: 'free', globalRequirements: 'Free draft text' })} />)
 
     expect(universalMarkup).toContain('Walmart')
     expect(universalMarkup).toContain('Universal draft text')
     expect(universalMarkup).toContain('Material：Polyester')
     expect(freeMarkup).toContain('Free draft text')
     expect(freeMarkup).toContain('允许自有水印')
+    expect(universalMarkup + freeMarkup).toContain('提示词结构')
     expect(universalMarkup + freeMarkup).not.toContain('Amazon主图禁止水印')
   })
 })

@@ -7,8 +7,7 @@ import {
 } from '../lib/amazonPrompt'
 import {
   A_PLUS_CONTENT_TYPES,
-  buildAmazonAPlusPlanPrompt,
-  buildAmazonPlanPrompt,
+  buildAmazonPromptParts,
   DEFAULT_LISTING_IMAGE_COUNT,
   formatAmazonListingSlotRange,
   formatAPlusModuleText,
@@ -59,6 +58,8 @@ import { DEFAULT_PARAMS } from '../types'
 import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState } from '../types'
 import StyleReferenceEditorModal from './StyleReferenceEditorModal'
 import ProductFactsAssistantModal from './ProductFactsAssistantModal'
+import PromptStructurePreview from './PromptStructurePreview'
+import { compileImagePrompt } from '../lib/promptCompiler'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 
 const FIELD_CLASS = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
@@ -343,7 +344,21 @@ function getAmazonListingPlannerChecks(
   ]
 }
 
-export default function AmazonPlanner() {
+export interface AmazonPlannerProps {
+  confirmedProductFacts?: string
+  globalRequirements?: string
+  perImageRequirements?: Record<string, string>
+  onGlobalRequirementsChange?: (value: string) => void
+  onPerImageRequirementChange?: (slot: string, value: string) => void
+}
+
+export default function AmazonPlanner({
+  confirmedProductFacts = '',
+  globalRequirements = '',
+  perImageRequirements = {},
+  onGlobalRequirementsChange = () => undefined,
+  onPerImageRequirementChange = () => undefined,
+}: AmazonPlannerProps = {}) {
   const prompt = useStore((s) => s.prompt)
   const inputImages = useStore((s) => s.inputImages)
   const settings = useStore((s) => s.settings)
@@ -431,21 +446,41 @@ export default function AmazonPlanner() {
   const usesStyleReferenceForActivePlan = styleReferenceRequired && hasStyleReference
   const effectiveReferenceCount = inputImages.length + (usesStyleReferenceForActivePlan && selectedStyleImage?.imageId && !inputImages.some((image) => image.id === selectedStyleImage.imageId) ? 1 : 0)
   const styleReferenceLimitExceeded = usesStyleReferenceForActivePlan && effectiveReferenceCount > API_MAX_IMAGES
-  const activePrompt = plannerMode === 'aplus'
-    ? selectedAPlusPlan ? buildAmazonAPlusPlanPrompt({
+  const listingTargetSize = resolution === '4k' ? '4096x4096' : '2048x2048'
+  const targetSize = plannerMode === 'aplus' && selectedAPlusPlan ? selectedAPlusPlan.generationSize : listingTargetSize
+  const promptGenerationParamLabel = `${DEFAULT_PARAMS.output_format.toUpperCase()} / ${DEFAULT_PARAMS.quality} / compression ${DEFAULT_PARAMS.output_compression}`
+  const actionSlot = plannerMode === 'aplus' ? selectedAPlusPlan?.slot : selectedPlan?.slot
+  const promptParts = plannerMode === 'aplus'
+    ? selectedAPlusPlan ? buildAmazonPromptParts({
       ...selectedAPlusPlan,
       seriesStyleGuide: activeSeriesStyleGuide,
       styleReferenceAttached: usesStyleReferenceForActivePlan,
       styleDensityMode,
       selectedVisualStyle: usesStyleReferenceForActivePlan ? selectedVisualStyle : null,
-    }) : ''
-    : selectedPlan ? buildAmazonPlanPrompt({
+    }) : null
+    : selectedPlan ? buildAmazonPromptParts({
       ...selectedPlan,
       seriesStyleGuide: isMainListingPlan ? null : activeSeriesStyleGuide,
       styleReferenceAttached: usesStyleReferenceForActivePlan,
       styleDensityMode,
       selectedVisualStyle: usesStyleReferenceForActivePlan ? selectedVisualStyle : null,
-    }) : ''
+    }) : null
+  const compiledPrompt = promptParts ? compileImagePrompt({
+    mode: 'amazon',
+    amazonSlot: actionSlot,
+    globalRequirements,
+    perImageRequirements: actionSlot ? perImageRequirements[actionSlot] : '',
+    confirmedProductFacts,
+    imageGoal: promptParts.imageGoal,
+    compositionAndCopy: plannerMode === 'aplus'
+      ? [selectedAPlusPlan?.planMarkdown, selectedAPlusText].filter(Boolean).join('\n\n')
+      : selectedPlan?.planMarkdown,
+    visualStyle: [promptParts.selectedVisualStyle, promptParts.styleDensityGuide, promptParts.styleReferenceGuard].filter(Boolean).join('\n\n'),
+    seriesConsistency: promptParts.seriesStyleGuide,
+    technicalRequirements: `${targetSize}; ${promptGenerationParamLabel}.`,
+    negativePrompt: promptParts.negativePrompt,
+  }) : null
+  const activePrompt = compiledPrompt?.finalPrompt ?? ''
   const activePlanMarkdown = plannerMode === 'aplus' ? selectedAPlusPlan?.planMarkdown ?? '' : selectedPlan?.planMarkdown ?? ''
   const activePlanPreview = activePlanMarkdown
     ? [
@@ -459,16 +494,13 @@ export default function AmazonPlanner() {
   const plannerProfileValidation = plannerProfile ? validateApiProfile(plannerProfile) : '未选择支持 Chat Completions 或 Responses API 的 AI 策划配置'
   const plannerApiLabel = plannerProfile?.apiMode === 'chat' ? 'Chat Completions' : 'Responses API'
   const plannerUsesOfficialDeepSeek = plannerProfile ? isOfficialDeepSeekPlannerProfile(plannerProfile) : false
-  const listingTargetSize = resolution === '4k' ? '4096x4096' : '2048x2048'
-  const targetSize = plannerMode === 'aplus' && selectedAPlusPlan ? selectedAPlusPlan.generationSize : listingTargetSize
   const generationParamLabel = `${DEFAULT_PARAMS.output_format.toUpperCase()} / ${DEFAULT_PARAMS.quality} / 压缩率${DEFAULT_PARAMS.output_compression}`
   const visiblePlanCount = plannerMode === 'aplus' ? aPlusPlansWithSizes.length : imagePlans.length
   const visiblePlanIndex = plannerMode === 'aplus' ? selectedAPlusPlanIndex : selectedPlanIndex
-  const actionSlot = plannerMode === 'aplus' ? selectedAPlusPlan?.slot : selectedPlan?.slot
   const actionLabel = plannerMode === 'aplus' ? selectedAPlusPlan?.label : selectedPlan?.label
   const showStickyActions = plannerMode === 'aplus' ? aPlusPlansWithSizes.length > 0 : imagePlans.length > 0
   const actionDisabled = plannerMode === 'aplus' ? !selectedAPlusPlan : !activePrompt.trim()
-  const submitDisabled = actionDisabled || (styleReferenceRequired && !hasStyleReference) || styleReferenceLimitExceeded
+  const submitDisabled = actionDisabled || !compiledPrompt?.canSubmit || (styleReferenceRequired && !hasStyleReference) || styleReferenceLimitExceeded
   const hasPlanOptions = visiblePlanCount > 0
   const hasSelectedPlan = plannerMode === 'aplus' ? Boolean(selectedAPlusPlan) : Boolean(selectedPlan)
   const canGoPrev = visiblePlanCount > 0 && visiblePlanIndex != null && visiblePlanIndex > 0
@@ -694,6 +726,11 @@ export default function AmazonPlanner() {
     }
     if (!activePrompt.trim()) {
       showToast(plannerMode === 'aplus' ? '请先 AI 策划并选择一个 A+ 模块' : '请先 AI 策划并选择一个图片位', 'error')
+      return false
+    }
+    if (compiledPrompt && !compiledPrompt.canSubmit) {
+      const blocker = compiledPrompt.diagnostics.find((item) => item.severity === 'blocker')
+      showToast(blocker?.message ?? '当前附加要求与 Amazon 硬性规则冲突，请修改后再生成。', 'error')
       return false
     }
     const shouldRequireStyle = options.requireStyle && styleReferenceRequired
@@ -2552,6 +2589,21 @@ export default function AmazonPlanner() {
             ))}
           </div>
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-gray-950">
+            <div className="mb-3 grid gap-3 lg:grid-cols-2">
+              <label>
+                <span className={LABEL_CLASS}>整套额外要求（所有 Amazon 图片）</span>
+                <textarea value={globalRequirements} onChange={(event) => onGlobalRequirementsChange(event.target.value)} className={`${FIELD_CLASS} min-h-24 resize-y`}
+                  placeholder="例如：整套保持冷色科技感；在不违反平台规则的前提下优先遵循。" />
+              </label>
+              <label>
+                <span className={LABEL_CLASS}>当前图片额外要求{actionSlot ? ` · ${actionSlot}` : ''}</span>
+                <textarea value={actionSlot ? perImageRequirements[actionSlot] ?? '' : ''}
+                  onChange={(event) => { if (actionSlot) onPerImageRequirementChange(actionSlot, event.target.value) }} disabled={!actionSlot}
+                  className={`${FIELD_CLASS} min-h-24 resize-y disabled:cursor-not-allowed disabled:opacity-50`}
+                  placeholder={actionSlot ? '例如：本张重点展示手柄细节；不会覆盖 Amazon 硬规则和商品事实。' : '请先选择一个图片位'} />
+              </label>
+            </div>
+            {compiledPrompt ? <div className="mb-3"><PromptStructurePreview compiled={compiledPrompt} /></div> : null}
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                 Prompt Preview{plannerMode === 'aplus' && selectedAPlusPlan ? ` · ${selectedAPlusPlan.slot}` : selectedPlan ? ` · ${selectedPlan.slot}` : ''}
