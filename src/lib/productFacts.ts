@@ -50,9 +50,13 @@ function normalizeStringList(value: unknown) {
   })
 }
 
-export function normalizeProductFactCard(input: ProductFactCardInput | unknown): ProductFactCard {
+export function normalizeProductFactCard(
+  input: ProductFactCardInput | unknown,
+  options: { preserveInferenceConfirmation?: boolean } = {},
+): ProductFactCard {
   const source = input && typeof input === 'object' ? input as ProductFactCardInput : {}
   const factKeys = new Set<string>()
+  const factIds = new Set<string>()
   const confirmedFacts = Array.isArray(source.confirmedFacts)
     ? source.confirmedFacts.flatMap((item, index) => {
       if (!item || typeof item !== 'object') return []
@@ -68,7 +72,10 @@ export function normalizeProductFactCard(input: ProductFactCardInput | unknown):
         : rawSource === 'confirmed-inference'
           ? 'confirmed-inference'
           : 'user'
-      return [{ id: cleanText(record.id) || slug(label, `fact-${index + 1}`), label, value, source: factSource }]
+      let id = cleanText(record.id) || slug(label, `fact-${index + 1}`)
+      while (factIds.has(id)) id = `${id}-${index + 1}`
+      factIds.add(id)
+      return [{ id, label, value, source: factSource }]
     })
     : []
 
@@ -88,7 +95,7 @@ export function normalizeProductFactCard(input: ProductFactCardInput | unknown):
         label,
         value,
         reason: cleanText(record.reason),
-        confirmed: record.confirmed === true,
+        confirmed: options.preserveInferenceConfirmation !== false && record.confirmed === true,
       }]
     })
     : []

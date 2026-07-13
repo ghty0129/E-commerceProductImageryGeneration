@@ -60,4 +60,23 @@ describe('product fact card', () => {
     expect(card.confirmedFacts).toHaveLength(1)
     expect(card.missingInformation).toEqual(['Capacity'])
   })
+
+  it('can force every AI-provided inference back to unconfirmed', () => {
+    const card = normalizeProductFactCard({
+      inferences: [{ id: 'capacity', label: 'Capacity', value: '30 L', confirmed: true }],
+    }, { preserveInferenceConfirmation: false })
+
+    expect(card.inferences[0]?.confirmed).toBe(false)
+  })
+
+  it('assigns unique ids to confirmed facts with the same label', () => {
+    const card = normalizeProductFactCard({
+      confirmedFacts: [
+        { label: 'Dimensions', value: 'Folded: 20 × 15 cm' },
+        { label: 'Dimensions', value: 'Expanded: 45 × 32 × 16 cm' },
+      ],
+    })
+
+    expect(new Set(card.confirmedFacts.map((fact) => fact.id)).size).toBe(2)
+  })
 })

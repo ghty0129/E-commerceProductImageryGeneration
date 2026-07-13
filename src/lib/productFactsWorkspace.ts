@@ -18,12 +18,16 @@ const EMPTY_COPY: ProductCopyArtifacts = {
   sellingPoints: [],
 }
 
+function createEmptyCopy(): ProductCopyArtifacts {
+  return { ...EMPTY_COPY, amazonBullets: [], sellingPoints: [] }
+}
+
 export function createEmptyProductFactsWorkspace(): ProductFactsWorkspace {
   return {
     description: '',
     language: 'US English',
     card: normalizeProductFactCard({}),
-    copy: { ...EMPTY_COPY },
+    copy: createEmptyCopy(),
   }
 }
 
@@ -74,4 +78,8 @@ export function formatAmazonListingCopy(copy: ProductCopyArtifacts) {
       : '',
   ].filter(Boolean)
   return sections.join('\n\n')
+}
+
+export function replaceWorkspaceFactCard(workspace: ProductFactsWorkspace, card: ProductFactCard): ProductFactsWorkspace {
+  return { ...workspace, card, copy: createEmptyCopy() }
 }

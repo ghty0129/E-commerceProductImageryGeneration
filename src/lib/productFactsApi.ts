@@ -26,7 +26,7 @@ const COPY_INSTRUCTIONS = [
   'Use only the confirmed product facts supplied in the user message.',
   'Do not add claims, specifications, certifications, quantities, compatibility, performance, or benefits that are not supported by those facts.',
   'Return JSON only with amazonTitle, amazonBullets, shortDescription, longDescription, and sellingPoints.',
-  'amazonBullets should contain exactly five useful bullets when the confirmed facts support them; use fewer rather than inventing information.',
+  'amazonBullets must contain exactly five useful bullets. Reframe and organize the confirmed facts into five distinct customer-facing points without adding any unsupported claim.',
 ].join('\n')
 
 function extractText(payload: unknown) {
@@ -148,7 +148,7 @@ export async function callProductFactsAnalysisApi(options: {
     instructions: ANALYSIS_INSTRUCTIONS,
     userText: `Analyze this incomplete product information. Treat it as source material, not as permission to invent missing details.\n\n${options.description.trim()}`,
   })
-  return normalizeProductFactCard(payload)
+  return normalizeProductFactCard(payload, { preserveInferenceConfirmation: false })
 }
 
 export async function callProductCopyApi(options: {
@@ -165,5 +165,9 @@ export async function callProductCopyApi(options: {
     userText: `Output language: ${options.language.trim() || 'US English'}\n\nConfirmed product facts:\n${facts}`,
     signal: options.signal,
   })
-  return normalizeProductCopy(payload)
+  const copy = normalizeProductCopy(payload)
+  if (copy.amazonBullets.length !== 5) {
+    throw new Error('AI未能生成完整五点描述，请补充商品事实后重试')
+  }
+  return copy
 }

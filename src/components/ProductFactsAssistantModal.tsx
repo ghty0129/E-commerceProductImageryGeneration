@@ -7,6 +7,7 @@ import {
   createEmptyProductFactsWorkspace,
   formatAmazonListingCopy,
   loadProductFactsWorkspace,
+  replaceWorkspaceFactCard,
   saveProductFactsWorkspace,
   type ProductFactsWorkspace,
 } from '../lib/productFactsWorkspace'
@@ -61,7 +62,7 @@ export default function ProductFactsAssistantModal({
         description: workspace.description,
         referenceImageDataUrls: isOfficialDeepSeekPlannerProfile(profile) ? [] : referenceImageDataUrls,
       })
-      setWorkspace((current) => ({ ...current, card }))
+      setWorkspace((current) => replaceWorkspaceFactCard(current, card))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -146,7 +147,7 @@ export default function ProductFactsAssistantModal({
                     <div className="mt-2 space-y-2">
                       {workspace.card.inferences.map((inference) => (
                         <label key={inference.id} className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 dark:border-amber-400/20 dark:bg-amber-400/10">
-                          <input type="checkbox" checked={inference.confirmed} onChange={(event) => setWorkspace((current) => ({ ...current, card: confirmProductInference(current.card, inference.id, event.target.checked) }))} className="mt-0.5" />
+                          <input type="checkbox" checked={inference.confirmed} onChange={(event) => setWorkspace((current) => replaceWorkspaceFactCard(current, confirmProductInference(current.card, inference.id, event.target.checked)))} className="mt-0.5" />
                           <span><strong>{inference.label}：</strong>{inference.value}{inference.reason ? <small className="mt-0.5 block text-amber-700/80 dark:text-amber-200/70">依据：{inference.reason}</small> : null}</span>
                         </label>
                       ))}

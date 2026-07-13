@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createEmptyProductFactsWorkspace, formatAmazonListingCopy, loadProductFactsWorkspace, saveProductFactsWorkspace } from './productFactsWorkspace'
+import { createEmptyProductFactsWorkspace, formatAmazonListingCopy, loadProductFactsWorkspace, replaceWorkspaceFactCard, saveProductFactsWorkspace } from './productFactsWorkspace'
+import { normalizeProductFactCard } from './productFacts'
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>()
@@ -34,5 +35,17 @@ describe('product facts workspace', () => {
     })
 
     expect(listing).toBe('Title: Foldable Polyester Travel Bag\n\nAbout this item\n- Folds flat for storage\n- Black polyester construction')
+  })
+
+  it('invalidates generated copy whenever the supporting fact card changes', () => {
+    const workspace = createEmptyProductFactsWorkspace()
+    workspace.copy.amazonTitle = 'Outdated title'
+
+    const updated = replaceWorkspaceFactCard(workspace, normalizeProductFactCard({
+      confirmedFacts: [{ label: 'Material', value: 'Polyester' }],
+    }))
+
+    expect(updated.copy.amazonTitle).toBe('')
+    expect(updated.card.confirmedFacts[0]?.value).toBe('Polyester')
   })
 })

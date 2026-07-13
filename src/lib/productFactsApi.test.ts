@@ -42,7 +42,7 @@ describe('product facts assistant API', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({
         amazonTitle: 'Foldable Polyester Travel Bag',
-        amazonBullets: ['Folds for storage'],
+        amazonBullets: ['Polyester material', 'Black color', 'Foldable construction', 'Travel use', 'Compact storage'],
         shortDescription: 'A foldable polyester bag for travel organization.',
         longDescription: 'Organize travel essentials with a foldable polyester bag.',
         sellingPoints: ['Polyester material', 'Foldable design'],
@@ -61,5 +61,6 @@ describe('product facts assistant API', () => {
     expect(userText).toContain('Material: Polyester')
     expect(userText).not.toContain('Waterproof')
     expect(copy.amazonTitle).toBe('Foldable Polyester Travel Bag')
+    expect(copy.amazonBullets).toHaveLength(5)
   })
 })
