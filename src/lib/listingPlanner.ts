@@ -274,7 +274,7 @@ export function normalizeOnImageCopy(copy: string): string {
     .join('\n')
 }
 
-function formatPromptBlock(options: {
+interface AmazonPromptBlockOptions {
   prompt: string
   negativePrompt?: string
   seriesStyleGuide?: string | null
@@ -285,7 +285,18 @@ function formatPromptBlock(options: {
     description: string
     palette: string[]
   } | null
-}) {
+}
+
+export interface AmazonPromptParts {
+  imageGoal: string
+  selectedVisualStyle: string
+  seriesStyleGuide: string
+  styleDensityGuide: string
+  negativePrompt: string
+  styleReferenceGuard: string
+}
+
+export function buildAmazonPromptParts(options: AmazonPromptBlockOptions): AmazonPromptParts {
   const selectedVisualStyle = options.styleReferenceAttached ? options.selectedVisualStyle : null
   const selectedStyleBlock = selectedVisualStyle
     ? [
@@ -300,17 +311,27 @@ function formatPromptBlock(options: {
   const seriesStyleGuideLabel = selectedStyleBlock
     ? 'Series style guide (lower priority than the selected visual style):'
     : 'Series style guide:'
-  const sections = [
-    options.prompt.trim(),
-    selectedStyleBlock,
-    options.seriesStyleGuide?.trim()
+  return {
+    imageGoal: options.prompt.trim(),
+    selectedVisualStyle: selectedStyleBlock,
+    seriesStyleGuide: options.seriesStyleGuide?.trim()
       ? `${seriesStyleGuideLabel}\n${options.seriesStyleGuide.trim()}`
       : '',
-    options.styleReferenceAttached ? STYLE_DENSITY_GUIDES[options.styleDensityMode ?? 'rich'] : '',
-    options.negativePrompt?.trim()
-      ? `Negative prompt:\n${options.negativePrompt.trim()}`
-      : '',
-    options.styleReferenceAttached ? STYLE_REFERENCE_GUARD : '',
+    styleDensityGuide: options.styleReferenceAttached ? STYLE_DENSITY_GUIDES[options.styleDensityMode ?? 'rich'] : '',
+    negativePrompt: options.negativePrompt?.trim() ?? '',
+    styleReferenceGuard: options.styleReferenceAttached ? STYLE_REFERENCE_GUARD : '',
+  }
+}
+
+function formatPromptBlock(options: AmazonPromptBlockOptions) {
+  const parts = buildAmazonPromptParts(options)
+  const sections = [
+    parts.imageGoal,
+    parts.selectedVisualStyle,
+    parts.seriesStyleGuide,
+    parts.styleDensityGuide,
+    parts.negativePrompt ? `Negative prompt:\n${parts.negativePrompt}` : '',
+    parts.styleReferenceGuard,
   ].filter(Boolean)
 
   return sections.join('\n\n')
