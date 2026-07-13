@@ -1927,7 +1927,7 @@ export async function initStore() {
 /** 提交新任务 */
 export type SubmitTaskSnapshot = Pick<AppState, 'prompt' | 'inputImages' | 'params' | 'pendingTaskCategory'>
 
-export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean; snapshot?: SubmitTaskSnapshot } = {}): Promise<boolean> {
+export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean; snapshot?: SubmitTaskSnapshot; onTaskCreated?: (taskId: string) => void } = {}): Promise<boolean> {
   const state = useStore.getState()
   const { settings, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, showToast, setConfirmDialog } = state
   const prompt = options.snapshot?.prompt ?? state.prompt
@@ -2035,9 +2035,12 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   }
 
   // 持久化输入图片到 IndexedDB（此前只在内存缓存中）
-  for (const img of orderedInputImages) {
-    await storeImage(img.dataUrl)
-  }
+  orderedInputImages = await Promise.all(orderedInputImages.map(async (img) => {
+    const storedId = await storeImage(img.dataUrl)
+    const id = options.snapshot ? storedId : img.id
+    cacheImage(id, img.dataUrl)
+    return { ...img, id }
+  }))
 
   const normalizedParams = normalizeParamsForSettings(params, requestSettings, { hasInputImages: orderedInputImages.length > 0 })
   const normalizedParamPatch = getChangedParams(params, normalizedParams)
@@ -2070,6 +2073,7 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   const latestTasks = useStore.getState().tasks
   useStore.getState().setTasks([task, ...latestTasks])
   await putTask(task)
+  options.onTaskCreated?.(taskId)
   useStore.getState().showToast('任务已提交', 'success')
 
   if (!options.snapshot && settings.clearInputAfterSubmit) {
