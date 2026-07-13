@@ -58,6 +58,7 @@ import {
 import { DEFAULT_PARAMS } from '../types'
 import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState } from '../types'
 import StyleReferenceEditorModal from './StyleReferenceEditorModal'
+import ProductFactsAssistantModal from './ProductFactsAssistantModal'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 
 const FIELD_CLASS = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
@@ -393,6 +394,7 @@ export default function AmazonPlanner() {
   const [plannerSessions, setPlannerSessions] = useState<AmazonPlannerSession[]>([])
   const [currentPlannerSessionId, setCurrentPlannerSessionId] = useState<string | null>(null)
   const [showPlannerHistory, setShowPlannerHistory] = useState(false)
+  const [showProductFactsAssistant, setShowProductFactsAssistant] = useState(false)
   const [isPlanning, setIsPlanning] = useState(false)
   const [plannerError, setPlannerError] = useState('')
   const [isPreparingReferencePayload, setIsPreparingReferencePayload] = useState(false)
@@ -1506,6 +1508,17 @@ export default function AmazonPlanner() {
         onSave={(state) => void saveStyleEditor(state)}
       />
     )}
+    <>
+    {showProductFactsAssistant && (
+      <ProductFactsAssistantModal
+        profile={plannerProfile}
+        profileError={plannerProfileValidation || null}
+        referenceImageDataUrls={inputImages.map((image) => image.dataUrl)}
+        onApplyAmazonCopy={setListingText}
+        onClose={() => setShowProductFactsAssistant(false)}
+        onOpenApiSettings={() => { setShowProductFactsAssistant(false); setShowSettings(true, 'api') }}
+      />
+    )}
     <section data-no-drag-select className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
       <div className="border-b border-gray-200 px-4 py-4 dark:border-white/[0.08] sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1535,6 +1548,13 @@ export default function AmazonPlanner() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowProductFactsAssistant(true)}
+              className="inline-flex h-10 items-center rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15"
+            >
+              商品资料助手
+            </button>
             {plannerMode === 'listing' && (
               <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-300">
                 <span className="text-xs text-gray-400 dark:text-gray-500">图片数</span>
@@ -2582,6 +2602,7 @@ export default function AmazonPlanner() {
         </div>
       </div>
     </section>
+    </>
     </>
   )
 }
