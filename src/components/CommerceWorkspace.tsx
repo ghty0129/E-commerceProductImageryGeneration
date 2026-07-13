@@ -4,7 +4,7 @@ import ProductFactsAssistantModal from './ProductFactsAssistantModal'
 import PromptStructurePreview from './PromptStructurePreview'
 import FlexiblePlanEditor from './FlexiblePlanEditor'
 import BatchProjectWorkspace, { type BatchProjectSlot } from './BatchProjectWorkspace'
-import { useStore } from '../store'
+import { submitTask, useStore } from '../store'
 import { getAmazonPlannerProfile, validateApiProfile } from '../lib/apiProfiles'
 import { CREATION_MODES, getCreationModePolicy, type CreationMode } from '../lib/creationModes'
 import { createEmptyCreationWorkspace, loadCreationWorkspace, saveCreationWorkspace, type CreationWorkspace } from '../lib/creationWorkspace'
@@ -19,6 +19,7 @@ import {
 } from '../lib/promptRequirementsWorkspace'
 import { createEmptyFlexiblePlanWorkspace, loadFlexiblePlanWorkspace, saveFlexiblePlanWorkspace, type FlexiblePlanWorkspace } from '../lib/flexiblePlanWorkspace'
 import type { ImageSetPlan } from '../lib/imageSetPlan'
+import { runBoundedProjectQueue } from '../lib/boundedProjectQueue'
 
 const FIELD_CLASS = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
 
@@ -158,6 +159,18 @@ export default function CommerceWorkspace() {
     setInputImages((slot.referenceImages ?? []).map((dataUrl, index) => ({ id: `${slot.id}-reference-${index}`, dataUrl })))
     showToast(`已载入 ${slot.name}，请检查右侧提示词后生成`, 'success')
   }
+  const submitBatchProject = async (slot: BatchProjectSlot) => {
+    if (!slot.plannedImages?.length) throw new Error('项目尚未生成逐图方案')
+    const baseParams = useStore.getState().params
+    const inputImages = (slot.referenceImages ?? []).map((dataUrl, index) => ({ id: `${slot.id}-reference-${index}`, dataUrl }))
+    const results = await runBoundedProjectQueue(slot.plannedImages.map((image, index) => ({ image, index })), async ({ image, index }) => {
+      const prompt = [slot.description, slot.requirements, `Image ${index + 1}: ${image.purpose}`, image.goal, 'Keep confirmed product appearance accurate. Do not copy third-party branding, wording, fixed layouts, or people poses.'].filter(Boolean).join('\n\n')
+      const submitted = await submitTask({ snapshot: { prompt, inputImages, params: { ...baseParams, n: 1 }, pendingTaskCategory: null } })
+      if (!submitted) throw new Error(`图片 ${index + 1} 提交失败`)
+    }, 2)
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') throw new Error(failure.error)
+  }
   const profile = getAmazonPlannerProfile(settings)
   const profileError = profile ? validateApiProfile(profile) : '未选择支持 Chat Completions 或 Responses API 的 AI 策划配置'
 
@@ -192,7 +205,7 @@ export default function CommerceWorkspace() {
         <div className="mb-3"><h1 className="text-lg font-bold text-gray-900 dark:text-white">选择创作模式</h1><p className="mt-1 text-xs text-gray-500">不同模式使用独立规则和草稿，切换不会覆盖其他模式内容。</p></div>
         <CreationModeTabs activeMode={workspace.activeMode} onChange={(activeMode) => setWorkspace((current) => ({ ...current, activeMode }))} />
       </section>
-      <BatchProjectWorkspace onLoadProject={loadBatchProject} />
+      <BatchProjectWorkspace onLoadProject={loadBatchProject} onRunProject={submitBatchProject} />
       {workspace.activeMode === 'amazon' ? (
         <><section className="mt-4 grid gap-4 lg:grid-cols-2"><ProductFactsSummary card={factCard} /><ModeRules mode="amazon" /></section>
           <AmazonPlanner confirmedProductFacts={confirmedProductFacts} globalRequirements={promptRequirements.amazon.globalRequirements} perImageRequirements={promptRequirements.amazon.perImageRequirements}

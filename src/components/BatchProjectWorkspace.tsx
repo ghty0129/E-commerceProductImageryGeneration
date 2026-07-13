@@ -3,12 +3,12 @@ import { runBoundedProjectQueue } from '../lib/boundedProjectQueue'
 import { strToU8, zipSync } from 'fflate'
 
 type ProjectImagePlan = { purpose: string; goal: string; referenceIndex?: number }
-export type BatchProjectSlot = { id: string; name: string; sku: string; description: string; requirements: string; imageCount: number; referenceImages: string[]; plannedImages: ProjectImagePlan[]; status: '待配置' | '排队中' | '处理中' | '已完成' | '失败' }
+export type BatchProjectSlot = { id: string; name: string; sku: string; description: string; requirements: string; imageCount: number; referenceImages: string[]; plannedImages: ProjectImagePlan[]; status: '待配置' | '排队中' | '处理中' | '已提交' | '失败' }
 type Slot = BatchProjectSlot
 const initial: Slot[] = Array.from({ length: 5 }, (_, index) => ({ id: `project-${index + 1}`, name: `项目 ${index + 1}`, sku: '', description: '', requirements: '', imageCount: 4, referenceImages: [], plannedImages: [], status: '待配置' }))
 const loadSlots = () => { try { const value = JSON.parse(localStorage.getItem('amazon-image-studio-batch-slots-v1') ?? 'null'); return Array.isArray(value) && value.length === 5 ? value as Slot[] : initial } catch { return initial } }
 
-export default function BatchProjectWorkspace({ onRunProject, onLoadProject }: { onRunProject?: (id: string) => Promise<void>; onLoadProject?: (slot: BatchProjectSlot) => void }) {
+export default function BatchProjectWorkspace({ onRunProject, onLoadProject }: { onRunProject?: (slot: BatchProjectSlot) => Promise<void>; onLoadProject?: (slot: BatchProjectSlot) => void }) {
   const [slots, setSlots] = useState<Slot[]>(() => typeof window === 'undefined' ? initial : loadSlots())
   const [selected, setSelected] = useState<string[]>([])
   const allSelected = selected.length === slots.length
@@ -57,11 +57,11 @@ export default function BatchProjectWorkspace({ onRunProject, onLoadProject }: {
         ...(slot.referenceImages?.length ? { referenceIndex: index % slot.referenceImages.length } : {}),
       }))
       setSlots((current) => current.map((item) => item.id === id ? { ...item, plannedImages } : item))
-      if (onRunProject) await onRunProject(id)
+      if (onRunProject) await onRunProject({ ...slot, plannedImages })
     }, 2)
     setSlots((current) => current.map((slot) => {
       const result = results.find((item) => item.item === slot.id)
-      return result ? { ...slot, status: result.status === 'fulfilled' ? '已完成' : '失败' } : slot
+      return result ? { ...slot, status: result.status === 'fulfilled' ? '已提交' : '失败' } : slot
     }))
     setRunning(false)
   }
