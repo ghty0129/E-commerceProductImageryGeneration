@@ -89,7 +89,7 @@ function ModeRules({ mode }: { mode: CreationMode }) {
   )
 }
 
-export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected }: {
+export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected, referenceCount }: {
   mode: 'universal' | 'free'
   workspace: CreationWorkspace
   setWorkspace: React.Dispatch<React.SetStateAction<CreationWorkspace>>
@@ -101,6 +101,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
   flexiblePlan?: ImageSetPlan
   onFlexiblePlanChange?: (plan: ImageSetPlan) => void
   onApplySelected?: () => void
+  referenceCount?: number
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950 sm:p-5">
@@ -133,7 +134,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
         </div>
         <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} /></div>
       </div>
-      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} /> : null}
+      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} referenceCount={referenceCount} /> : null}
     </section>
   )
 }
@@ -199,7 +200,8 @@ export default function CommerceWorkspace() {
           compiledPrompt={currentGenericPrompt}
           flexiblePlan={flexiblePlans[workspace.activeMode]}
           onFlexiblePlanChange={(plan) => setFlexiblePlans((current) => ({ ...current, [workspace.activeMode]: plan }))}
-          onApplySelected={() => { setPrompt(currentGenericPrompt.finalPrompt); showToast('已把当前图片方案填入生图栏', 'success') }} />
+          onApplySelected={() => { setPrompt(currentGenericPrompt.finalPrompt); showToast('已把当前图片方案填入生图栏', 'success') }}
+          referenceCount={inputImages.length} />
       )}
       {showProductFactsAssistant ? <ProductFactsAssistantModal profile={profile} profileError={profileError} referenceImageDataUrls={inputImages.map((image) => image.dataUrl)} showAmazonApply={false} onApplyAmazonCopy={() => undefined}
         onClose={() => { setShowProductFactsAssistant(false); setFactCard(loadFactCard()) }} onOpenApiSettings={() => { setShowProductFactsAssistant(false); setShowSettings(true, 'api') }} /> : null}
