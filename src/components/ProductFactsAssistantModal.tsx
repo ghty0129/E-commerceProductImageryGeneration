@@ -21,6 +21,7 @@ interface ProductFactsAssistantModalProps {
   onApplyAmazonCopy: (listingText: string) => void
   onClose: () => void
   onOpenApiSettings: () => void
+  showAmazonApply?: boolean
 }
 
 const FIELD_CLASS = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
@@ -36,6 +37,7 @@ export default function ProductFactsAssistantModal({
   onApplyAmazonCopy,
   onClose,
   onOpenApiSettings,
+  showAmazonApply = true,
 }: ProductFactsAssistantModalProps) {
   const [workspace, setWorkspace] = useState<ProductFactsWorkspace>(loadInitialWorkspace)
   const [busy, setBusy] = useState<'analysis' | 'copy' | null>(null)
@@ -184,7 +186,7 @@ export default function ProductFactsAssistantModal({
             <button type="button" onClick={() => setWorkspace(createEmptyProductFactsWorkspace())} className="h-9 rounded-lg px-3 text-sm font-medium text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/[0.08]">清空</button>
             {profileError ? <button type="button" onClick={onOpenApiSettings} className="h-9 rounded-lg px-3 text-sm font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300">配置AI接口</button> : null}
           </div>
-          <button type="button" disabled={!amazonListingCopy} onClick={() => { onApplyAmazonCopy(amazonListingCopy); onClose() }} className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-300">回填到Amazon策划</button>
+          {showAmazonApply ? <button type="button" disabled={!amazonListingCopy} onClick={() => { onApplyAmazonCopy(amazonListingCopy); onClose() }} className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-300">回填到Amazon策划</button> : <span className="text-xs text-gray-500">商品事实和文案已自动保存，可供当前模式使用。</span>}
         </div>
       </div>
     </div>
