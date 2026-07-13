@@ -3,6 +3,7 @@ import AmazonPlanner from './AmazonPlanner'
 import ProductFactsAssistantModal from './ProductFactsAssistantModal'
 import PromptStructurePreview from './PromptStructurePreview'
 import FlexiblePlanEditor from './FlexiblePlanEditor'
+import BatchProjectWorkspace from './BatchProjectWorkspace'
 import { useStore } from '../store'
 import { getAmazonPlannerProfile, validateApiProfile } from '../lib/apiProfiles'
 import { CREATION_MODES, getCreationModePolicy, type CreationMode } from '../lib/creationModes'
@@ -184,6 +185,7 @@ export default function CommerceWorkspace() {
         <div className="mb-3"><h1 className="text-lg font-bold text-gray-900 dark:text-white">选择创作模式</h1><p className="mt-1 text-xs text-gray-500">不同模式使用独立规则和草稿，切换不会覆盖其他模式内容。</p></div>
         <CreationModeTabs activeMode={workspace.activeMode} onChange={(activeMode) => setWorkspace((current) => ({ ...current, activeMode }))} />
       </section>
+      <BatchProjectWorkspace />
       {workspace.activeMode === 'amazon' ? (
         <><section className="mt-4 grid gap-4 lg:grid-cols-2"><ProductFactsSummary card={factCard} /><ModeRules mode="amazon" /></section>
           <AmazonPlanner confirmedProductFacts={confirmedProductFacts} globalRequirements={promptRequirements.amazon.globalRequirements} perImageRequirements={promptRequirements.amazon.perImageRequirements}
