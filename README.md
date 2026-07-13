@@ -4,7 +4,17 @@
 
 当前版本在原有 Amazon Listing / A+ 图片工作流上，增加了平台通用模式、自由创作模式、商品资料助手、灵活逐图方案、参考套图重构、批量项目队列和项目 ZIP 归档。
 
-本项目基于 [Amazon Image Studio](https://github.com/Ali-Aria/amazon-image-studio) 和 [CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground) 扩展，源代码按仓库中的 [MIT License](LICENSE) 发布。
+## 开源来源与致谢
+
+> **重要说明：本项目是在 [Ali-Aria/amazon-image-studio](https://github.com/Ali-Aria/amazon-image-studio) 的基础上进行二次开发和功能扩展。感谢原作者 Ali-Aria 公开项目源码并提供 Amazon Listing、A+ 图片策划与 AI 生图工作台的基础实现。**
+
+原始项目本身基于 [CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground) 修改。本仓库在此基础上继续增加平台通用模式、自由创作模式、商品资料助手、灵活逐图方案、参考套图重构、批量项目队列和项目 ZIP 归档等功能。
+
+- 原作者项目：[Ali-Aria/amazon-image-studio](https://github.com/Ali-Aria/amazon-image-studio)
+- 上游基础项目：[CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground)
+- 开源许可：本仓库继续遵循项目中的 [MIT License](LICENSE)
+
+如需了解原始设计、历史功能或上游版本，请优先访问原作者仓库。本仓库新增功能和后续修改由本仓库维护者负责，与原作者无直接关联。
 
 ## 目录
 
