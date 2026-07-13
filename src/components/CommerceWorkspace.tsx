@@ -3,7 +3,7 @@ import AmazonPlanner from './AmazonPlanner'
 import ProductFactsAssistantModal from './ProductFactsAssistantModal'
 import PromptStructurePreview from './PromptStructurePreview'
 import FlexiblePlanEditor from './FlexiblePlanEditor'
-import BatchProjectWorkspace from './BatchProjectWorkspace'
+import BatchProjectWorkspace, { type BatchProjectSlot } from './BatchProjectWorkspace'
 import { useStore } from '../store'
 import { getAmazonPlannerProfile, validateApiProfile } from '../lib/apiProfiles'
 import { CREATION_MODES, getCreationModePolicy, type CreationMode } from '../lib/creationModes'
@@ -151,6 +151,13 @@ export default function CommerceWorkspace() {
   const setShowSettings = useStore((state) => state.setShowSettings)
   const setPrompt = useStore((state) => state.setPrompt)
   const showToast = useStore((state) => state.showToast)
+  const setInputImages = useStore((state) => state.setInputImages)
+  const loadBatchProject = (slot: BatchProjectSlot) => {
+    const firstPlan = slot.plannedImages?.[0]
+    setPrompt([slot.description, slot.requirements, firstPlan ? `Image purpose: ${firstPlan.purpose}.\nImage goal: ${firstPlan.goal}` : ''].filter(Boolean).join('\n\n'))
+    setInputImages((slot.referenceImages ?? []).map((dataUrl, index) => ({ id: `${slot.id}-reference-${index}`, dataUrl })))
+    showToast(`已载入 ${slot.name}，请检查右侧提示词后生成`, 'success')
+  }
   const profile = getAmazonPlannerProfile(settings)
   const profileError = profile ? validateApiProfile(profile) : '未选择支持 Chat Completions 或 Responses API 的 AI 策划配置'
 
@@ -185,7 +192,7 @@ export default function CommerceWorkspace() {
         <div className="mb-3"><h1 className="text-lg font-bold text-gray-900 dark:text-white">选择创作模式</h1><p className="mt-1 text-xs text-gray-500">不同模式使用独立规则和草稿，切换不会覆盖其他模式内容。</p></div>
         <CreationModeTabs activeMode={workspace.activeMode} onChange={(activeMode) => setWorkspace((current) => ({ ...current, activeMode }))} />
       </section>
-      <BatchProjectWorkspace />
+      <BatchProjectWorkspace onLoadProject={loadBatchProject} />
       {workspace.activeMode === 'amazon' ? (
         <><section className="mt-4 grid gap-4 lg:grid-cols-2"><ProductFactsSummary card={factCard} /><ModeRules mode="amazon" /></section>
           <AmazonPlanner confirmedProductFacts={confirmedProductFacts} globalRequirements={promptRequirements.amazon.globalRequirements} perImageRequirements={promptRequirements.amazon.perImageRequirements}
