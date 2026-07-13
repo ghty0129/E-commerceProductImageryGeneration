@@ -1925,9 +1925,16 @@ export async function initStore() {
 }
 
 /** 提交新任务 */
-export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean } = {}): Promise<boolean> {
-  const { settings, prompt, inputImages, maskDraft, params, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, pendingTaskCategory, showToast, setConfirmDialog } =
-    useStore.getState()
+export type SubmitTaskSnapshot = Pick<AppState, 'prompt' | 'inputImages' | 'params' | 'pendingTaskCategory'>
+
+export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean; snapshot?: SubmitTaskSnapshot } = {}): Promise<boolean> {
+  const state = useStore.getState()
+  const { settings, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, showToast, setConfirmDialog } = state
+  const prompt = options.snapshot?.prompt ?? state.prompt
+  const inputImages = options.snapshot?.inputImages ?? state.inputImages
+  const params = options.snapshot?.params ?? state.params
+  const pendingTaskCategory = options.snapshot?.pendingTaskCategory ?? state.pendingTaskCategory
+  const maskDraft = options.snapshot ? null : state.maskDraft
 
   const normalizedSettings = normalizeSettings(settings)
   let activeProfile = getActiveApiProfile(settings)
@@ -2034,7 +2041,7 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
 
   const normalizedParams = normalizeParamsForSettings(params, requestSettings, { hasInputImages: orderedInputImages.length > 0 })
   const normalizedParamPatch = getChangedParams(params, normalizedParams)
-  if (Object.keys(normalizedParamPatch).length) {
+  if (!options.snapshot && Object.keys(normalizedParamPatch).length) {
     useStore.getState().setParams(normalizedParamPatch)
   }
 
@@ -2065,12 +2072,12 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   await putTask(task)
   useStore.getState().showToast('任务已提交', 'success')
 
-  if (settings.clearInputAfterSubmit) {
+  if (!options.snapshot && settings.clearInputAfterSubmit) {
     useStore.getState().setPrompt('')
     useStore.getState().clearInputImages()
   }
   useStore.getState().setReusedTaskApiProfile(null)
-  useStore.getState().setPendingTaskCategory(null)
+  if (!options.snapshot) useStore.getState().setPendingTaskCategory(null)
 
   // 异步调用 API
   executeTask(taskId)
