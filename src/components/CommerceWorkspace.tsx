@@ -89,7 +89,7 @@ function ModeRules({ mode }: { mode: CreationMode }) {
   )
 }
 
-export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange }: {
+export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected }: {
   mode: 'universal' | 'free'
   workspace: CreationWorkspace
   setWorkspace: React.Dispatch<React.SetStateAction<CreationWorkspace>>
@@ -100,6 +100,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
   compiledPrompt: CompiledImagePrompt
   flexiblePlan?: ImageSetPlan
   onFlexiblePlanChange?: (plan: ImageSetPlan) => void
+  onApplySelected?: () => void
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950 sm:p-5">
@@ -132,7 +133,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
         </div>
         <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} /></div>
       </div>
-      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} /> : null}
+      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} /> : null}
     </section>
   )
 }
@@ -146,6 +147,8 @@ export default function CommerceWorkspace() {
   const settings = useStore((state) => state.settings)
   const inputImages = useStore((state) => state.inputImages)
   const setShowSettings = useStore((state) => state.setShowSettings)
+  const setPrompt = useStore((state) => state.setPrompt)
+  const showToast = useStore((state) => state.showToast)
   const profile = getAmazonPlannerProfile(settings)
   const profileError = profile ? validateApiProfile(profile) : '未选择支持 Chat Completions 或 Responses API 的 AI 策划配置'
 
@@ -195,7 +198,8 @@ export default function CommerceWorkspace() {
           }}
           compiledPrompt={currentGenericPrompt}
           flexiblePlan={flexiblePlans[workspace.activeMode]}
-          onFlexiblePlanChange={(plan) => setFlexiblePlans((current) => ({ ...current, [workspace.activeMode]: plan }))} />
+          onFlexiblePlanChange={(plan) => setFlexiblePlans((current) => ({ ...current, [workspace.activeMode]: plan }))}
+          onApplySelected={() => { setPrompt(currentGenericPrompt.finalPrompt); showToast('已把当前图片方案填入生图栏', 'success') }} />
       )}
       {showProductFactsAssistant ? <ProductFactsAssistantModal profile={profile} profileError={profileError} referenceImageDataUrls={inputImages.map((image) => image.dataUrl)} showAmazonApply={false} onApplyAmazonCopy={() => undefined}
         onClose={() => { setShowProductFactsAssistant(false); setFactCard(loadFactCard()) }} onOpenApiSettings={() => { setShowProductFactsAssistant(false); setShowSettings(true, 'api') }} /> : null}
