@@ -156,18 +156,23 @@ export default function CommerceWorkspace() {
   const confirmedProductFacts = useMemo(() => factCard ? buildConfirmedProductFactsText(factCard) : '', [factCard])
   const genericMode = workspace.activeMode === 'free' ? 'free' : 'universal'
   const currentGenericPrompt = useMemo(() => {
+    const plan = flexiblePlans[genericMode]
+    const selected = plan.images.find((image) => image.id === plan.selectedImageId) ?? plan.images[0]
     const composition = genericMode === 'universal'
       ? [`Target platform: ${workspace.universal.platform || 'Not specified'}.`, workspace.universal.platformNotes].filter(Boolean).join('\n')
       : [`Allow on-image text: ${workspace.free.allowText ? 'yes' : 'no'}.`, `Allow owned logo: ${workspace.free.allowOwnedLogo ? 'yes' : 'no'}.`, `Allow owned watermark: ${workspace.free.allowWatermark ? 'yes' : 'no'}.`].join('\n')
     return compileImagePrompt({
       mode: genericMode,
       globalRequirements: promptRequirements[genericMode].globalRequirements,
+      perImageRequirements: selected?.perImageRequirements,
       confirmedProductFacts,
-      imageGoal: `Plan a coherent set of ${workspace[genericMode].imageCount} product images.`,
-      compositionAndCopy: composition,
-      technicalRequirements: 'Per-image dimensions and output format will be selected with the image plan.',
+      imageGoal: selected ? `${selected.purpose}\n${selected.goal}` : `Plan a coherent set of ${workspace[genericMode].imageCount} product images.`,
+      compositionAndCopy: [composition, selected?.composition, selected?.evidence, selected?.copy].filter(Boolean).join('\n'),
+      visualStyle: selected?.styleOverride,
+      seriesConsistency: plan.seriesStyle,
+      technicalRequirements: selected ? `${selected.aspectRatio}; ${selected.resolution}px long edge; ${selected.outputFormat}.` : 'Use the selected image settings.',
     })
-  }, [confirmedProductFacts, genericMode, promptRequirements, workspace])
+  }, [confirmedProductFacts, flexiblePlans, genericMode, promptRequirements, workspace])
 
   return (
     <>
