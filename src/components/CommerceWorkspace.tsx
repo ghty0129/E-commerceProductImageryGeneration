@@ -11,7 +11,6 @@ import { createEmptyCreationWorkspace, loadCreationWorkspace, saveCreationWorksp
 import { loadProductFactsWorkspace } from '../lib/productFactsWorkspace'
 import { buildConfirmedProductFactsText, type ProductFactCard } from '../lib/productFacts'
 import { buildChinesePromptReview, compileImagePrompt, type CompiledImagePrompt } from '../lib/promptCompiler'
-import { callPromptEnglishTranslationApi } from '../lib/productFactsApi'
 import {
   createEmptyPromptRequirementWorkspace,
   loadPromptRequirementWorkspace,
@@ -91,7 +90,7 @@ function ModeRules({ mode }: { mode: CreationMode }) {
   )
 }
 
-export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected, referenceCount, applyingPrompt }: {
+export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected, referenceCount }: {
   mode: 'universal' | 'free'
   workspace: CreationWorkspace
   setWorkspace: React.Dispatch<React.SetStateAction<CreationWorkspace>>
@@ -104,7 +103,6 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
   onFlexiblePlanChange?: (plan: ImageSetPlan) => void
   onApplySelected?: () => void | Promise<void>
   referenceCount?: number
-  applyingPrompt?: boolean
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950 sm:p-5">
@@ -139,7 +137,7 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
         </div>
         <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} chineseReview={buildChinesePromptReview(compiledPrompt)} /></div>
       </div>
-      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} referenceCount={referenceCount} applying={applyingPrompt} /> : null}
+      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} referenceCount={referenceCount} /> : null}
     </section>
   )
 }
@@ -149,7 +147,6 @@ export default function CommerceWorkspace() {
   const [promptRequirements, setPromptRequirements] = useState<PromptRequirementWorkspace>(loadInitialPromptRequirements)
   const [flexiblePlans, setFlexiblePlans] = useState<FlexiblePlanWorkspace>(() => typeof window === 'undefined' ? createEmptyFlexiblePlanWorkspace() : loadFlexiblePlanWorkspace(window.localStorage))
   const [showProductFactsAssistant, setShowProductFactsAssistant] = useState(false)
-  const [translatingPrompt, setTranslatingPrompt] = useState(false)
   const [factCard, setFactCard] = useState<ProductFactCard | null>(loadFactCard)
   const settings = useStore((state) => state.settings)
   const inputImages = useStore((state) => state.inputImages)
@@ -184,26 +181,13 @@ export default function CommerceWorkspace() {
     })
   }, [confirmedProductFacts, flexiblePlans, genericMode, promptRequirements, workspace])
 
-  const applyCurrentPrompt = async () => {
+  const applyCurrentPrompt = () => {
     if (!currentGenericPrompt.canSubmit) {
       showToast('中文提示词中存在阻止生成的问题，请先处理', 'error')
       return
     }
-    if (!profile || profileError) {
-      showToast(profileError || '请先配置 AI 策划接口', 'error')
-      setShowSettings(true, 'api')
-      return
-    }
-    setTranslatingPrompt(true)
-    try {
-      const englishPrompt = await callPromptEnglishTranslationApi({ profile, chinesePrompt: buildChinesePromptReview(currentGenericPrompt) })
-      setPrompt(englishPrompt)
-      showToast('英文提示词已填入生图栏', 'success')
-    } catch (reason) {
-      showToast(`英文提示词生成失败：${reason instanceof Error ? reason.message : String(reason)}`, 'error')
-    } finally {
-      setTranslatingPrompt(false)
-    }
+    setPrompt(buildChinesePromptReview(currentGenericPrompt))
+    showToast('中文提示词已填入生图栏', 'success')
   }
 
   return (
@@ -229,7 +213,6 @@ export default function CommerceWorkspace() {
           flexiblePlan={flexiblePlans[workspace.activeMode]}
           onFlexiblePlanChange={(plan) => setFlexiblePlans((current) => ({ ...current, [workspace.activeMode]: plan }))}
           onApplySelected={applyCurrentPrompt}
-          applyingPrompt={translatingPrompt}
           referenceCount={inputImages.length} />
       )}
       {showProductFactsAssistant ? <ProductFactsAssistantModal profile={profile} profileError={profileError} referenceImageDataUrls={inputImages.map((image) => image.dataUrl)} showAmazonApply={false} onApplyAmazonCopy={() => undefined}

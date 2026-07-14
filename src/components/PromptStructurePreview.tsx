@@ -44,7 +44,7 @@ export default function PromptStructurePreview({ compiled, chineseReview }: { co
       {chineseReview ? (
         <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-400/20 dark:bg-blue-400/10">
           <div className="text-xs font-bold text-blue-800 dark:text-blue-200">中文提示词预览（审核用）</div>
-          <div className="mt-1 text-[11px] text-blue-700/70 dark:text-blue-200/70">确认内容无误后，点击“生成英文并填入生图栏”。</div>
+          <div className="mt-1 text-[11px] text-blue-700/70 dark:text-blue-200/70">确认内容无误后，可直接把中文提示词填入生图栏，无需等待翻译。</div>
           <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white p-3 font-sans text-xs leading-relaxed text-gray-700 dark:bg-gray-950 dark:text-gray-200">{chineseReview}</pre>
         </div>
       ) : null}
