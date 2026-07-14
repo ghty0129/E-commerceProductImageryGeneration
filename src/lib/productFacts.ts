@@ -116,6 +116,54 @@ export function confirmProductInference(card: ProductFactCard, inferenceId: stri
   }
 }
 
+export function productFactDecisionKey(fact: { label: string; value: string }) {
+  return `${cleanText(fact.label).toLocaleLowerCase()}\u0000${cleanText(fact.value).toLocaleLowerCase()}`
+}
+
+export function promoteProductInferences(card: ProductFactCard, inferenceIds: Iterable<string>): ProductFactCard {
+  const selected = new Set(inferenceIds)
+  if (!selected.size) return card
+  const promoted = card.inferences
+    .filter((inference) => selected.has(inference.id))
+    .map((inference) => ({
+      id: inference.id,
+      label: inference.label,
+      value: inference.value,
+      source: 'confirmed-inference' as const,
+    }))
+  const existing = new Set(card.confirmedFacts.map(productFactDecisionKey))
+  return {
+    ...card,
+    confirmedFacts: [...card.confirmedFacts, ...promoted.filter((fact) => !existing.has(productFactDecisionKey(fact)))],
+    inferences: card.inferences.filter((inference) => !selected.has(inference.id)),
+  }
+}
+
+export function mergeProductFactAnalysis(
+  previous: ProductFactCard,
+  incoming: ProductFactCard,
+  rejectedFactKeys: Iterable<string> = [],
+): ProductFactCard {
+  const rejected = new Set(rejectedFactKeys)
+  const confirmed = previous.confirmedFacts.filter((fact) => !rejected.has(productFactDecisionKey(fact)))
+  const confirmedKeys = new Set(confirmed.map(productFactDecisionKey))
+  for (const fact of incoming.confirmedFacts) {
+    const key = productFactDecisionKey(fact)
+    if (!rejected.has(key) && !confirmedKeys.has(key)) {
+      confirmed.push(fact)
+      confirmedKeys.add(key)
+    }
+  }
+  return {
+    ...incoming,
+    confirmedFacts: confirmed,
+    inferences: incoming.inferences.filter((inference) => {
+      const key = productFactDecisionKey(inference)
+      return !rejected.has(key) && !confirmedKeys.has(key)
+    }),
+  }
+}
+
 export function buildConfirmedProductFactsText(card: ProductFactCard) {
   const facts = [
     ...card.confirmedFacts,

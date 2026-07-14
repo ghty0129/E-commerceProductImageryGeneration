@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ApiProfile } from '../types'
 import { isOfficialDeepSeekPlannerProfile } from '../lib/apiProfiles'
-import { confirmProductInference } from '../lib/productFacts'
 import { callProductCopyApi, callProductFactsAnalysisApi } from '../lib/productFactsApi'
 import {
   createEmptyProductFactsWorkspace,
   formatAmazonListingCopy,
   loadProductFactsWorkspace,
-  replaceWorkspaceFactCard,
+  mergeWorkspaceFactAnalysis,
+  promoteWorkspaceInferences,
+  removeWorkspaceConfirmedFact,
   saveProductFactsWorkspace,
   type ProductFactsWorkspace,
 } from '../lib/productFactsWorkspace'
@@ -42,6 +43,7 @@ export default function ProductFactsAssistantModal({
   const [workspace, setWorkspace] = useState<ProductFactsWorkspace>(loadInitialWorkspace)
   const [busy, setBusy] = useState<'analysis' | 'copy' | null>(null)
   const [error, setError] = useState('')
+  const [selectedInferenceIds, setSelectedInferenceIds] = useState<string[]>([])
 
   useEffect(() => {
     saveProductFactsWorkspace(window.localStorage, workspace)
@@ -64,7 +66,8 @@ export default function ProductFactsAssistantModal({
         description: workspace.description,
         referenceImageDataUrls: isOfficialDeepSeekPlannerProfile(profile) ? [] : referenceImageDataUrls,
       })
-      setWorkspace((current) => replaceWorkspaceFactCard(current, card))
+      setWorkspace((current) => mergeWorkspaceFactAnalysis(current, card))
+      setSelectedInferenceIds([])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -139,7 +142,12 @@ export default function ProductFactsAssistantModal({
                   <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">已确认事实</div>
                   {workspace.card.confirmedFacts.length ? (
                     <ul className="mt-1 space-y-1 text-gray-700 dark:text-gray-200">
-                      {workspace.card.confirmedFacts.map((fact) => <li key={fact.id}>• {fact.label}：{fact.value}</li>)}
+                      {workspace.card.confirmedFacts.map((fact) => (
+                        <li key={fact.id} className="flex items-start justify-between gap-2 rounded-lg bg-emerald-50 px-2 py-1.5 dark:bg-emerald-400/10">
+                          <span>• {fact.label}：{fact.value}</span>
+                          <button type="button" onClick={() => setWorkspace((current) => removeWorkspaceConfirmedFact(current, fact.id))} className="shrink-0 rounded px-1.5 text-base leading-5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-400/10" aria-label={`删除事实：${fact.label}`}>×</button>
+                        </li>
+                      ))}
                     </ul>
                   ) : <p className="mt-1 text-xs text-gray-400">分析后显示用户提供或参考图明确支持的事实。</p>}
                 </section>
@@ -149,10 +157,14 @@ export default function ProductFactsAssistantModal({
                     <div className="mt-2 space-y-2">
                       {workspace.card.inferences.map((inference) => (
                         <label key={inference.id} className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 dark:border-amber-400/20 dark:bg-amber-400/10">
-                          <input type="checkbox" checked={inference.confirmed} onChange={(event) => setWorkspace((current) => replaceWorkspaceFactCard(current, confirmProductInference(current.card, inference.id, event.target.checked)))} className="mt-0.5" />
+                          <input type="checkbox" checked={selectedInferenceIds.includes(inference.id)} onChange={(event) => setSelectedInferenceIds((current) => event.target.checked ? [...current, inference.id] : current.filter((id) => id !== inference.id))} className="mt-0.5" />
                           <span><strong>{inference.label}：</strong>{inference.value}{inference.reason ? <small className="mt-0.5 block text-amber-700/80 dark:text-amber-200/70">依据：{inference.reason}</small> : null}</span>
                         </label>
                       ))}
+                      <button type="button" disabled={!selectedInferenceIds.length} onClick={() => {
+                        setWorkspace((current) => promoteWorkspaceInferences(current, selectedInferenceIds))
+                        setSelectedInferenceIds([])
+                      }} className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-300">确认选中推测并加入事实</button>
                     </div>
                   ) : <p className="mt-1 text-xs text-gray-400">没有待确认推测。</p>}
                 </section>

@@ -1,4 +1,4 @@
-import { normalizeProductFactCard, type ProductFactCard } from './productFacts'
+import { mergeProductFactAnalysis, normalizeProductFactCard, productFactDecisionKey, promoteProductInferences, type ProductFactCard } from './productFacts'
 import type { ProductCopyArtifacts } from './productFactsApi'
 
 const STORAGE_KEY = 'amazon-image-studio-product-facts-workspace-v1'
@@ -7,6 +7,7 @@ export interface ProductFactsWorkspace {
   description: string
   language: string
   card: ProductFactCard
+  rejectedFactKeys: string[]
   copy: ProductCopyArtifacts
 }
 
@@ -27,6 +28,7 @@ export function createEmptyProductFactsWorkspace(): ProductFactsWorkspace {
     description: '',
     language: 'US English',
     card: normalizeProductFactCard({}),
+    rejectedFactKeys: [],
     copy: createEmptyCopy(),
   }
 }
@@ -49,6 +51,7 @@ export function loadProductFactsWorkspace(storage: Pick<Storage, 'getItem'>): Pr
       description: cleanText(parsed.description),
       language: cleanText(parsed.language) || 'US English',
       card: normalizeProductFactCard(parsed.card),
+      rejectedFactKeys: cleanList(parsed.rejectedFactKeys),
       copy: {
         amazonTitle: cleanText(copy.amazonTitle),
         amazonBullets: cleanList(copy.amazonBullets),
@@ -82,4 +85,28 @@ export function formatAmazonListingCopy(copy: ProductCopyArtifacts) {
 
 export function replaceWorkspaceFactCard(workspace: ProductFactsWorkspace, card: ProductFactCard): ProductFactsWorkspace {
   return { ...workspace, card, copy: createEmptyCopy() }
+}
+
+export function mergeWorkspaceFactAnalysis(workspace: ProductFactsWorkspace, card: ProductFactCard): ProductFactsWorkspace {
+  return {
+    ...workspace,
+    card: mergeProductFactAnalysis(workspace.card, card, workspace.rejectedFactKeys),
+    copy: createEmptyCopy(),
+  }
+}
+
+export function promoteWorkspaceInferences(workspace: ProductFactsWorkspace, inferenceIds: Iterable<string>): ProductFactsWorkspace {
+  return { ...workspace, card: promoteProductInferences(workspace.card, inferenceIds), copy: createEmptyCopy() }
+}
+
+export function removeWorkspaceConfirmedFact(workspace: ProductFactsWorkspace, factId: string): ProductFactsWorkspace {
+  const removed = workspace.card.confirmedFacts.find((fact) => fact.id === factId)
+  if (!removed) return workspace
+  const rejectedFactKeys = Array.from(new Set([...workspace.rejectedFactKeys, productFactDecisionKey(removed)]))
+  return {
+    ...workspace,
+    rejectedFactKeys,
+    card: { ...workspace.card, confirmedFacts: workspace.card.confirmedFacts.filter((fact) => fact.id !== factId) },
+    copy: createEmptyCopy(),
+  }
 }
