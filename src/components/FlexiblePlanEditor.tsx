@@ -1,5 +1,6 @@
-import { addPlannedImage, createImageSetPlan as createPlan, confirmImageSetPlan, copyPlannedImage, deletePlannedImage, isImageSetPlanConfirmed, movePlannedImage, selectPlannedImage, updatePlannedImage, type ImageSetPlan, type PlannedImage } from '../lib/imageSetPlan'
+import { addPlannedImage, confirmImageSetPlan, copyPlannedImage, deletePlannedImage, isImageSetPlanConfirmed, movePlannedImage, selectPlannedImage, updatePlannedImage, type ImageSetPlan, type PlannedImage } from '../lib/imageSetPlan'
 import { useState } from 'react'
+import { createLocalImagePlan } from '../lib/localImagePlan'
 
 const field = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-gray-950 dark:text-white'
 
@@ -10,16 +11,11 @@ export default function FlexiblePlanEditor({ plan, onChange, requestedCount = 4,
   const newId = () => `${plan.mode}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
   const autoPlan = () => {
     const count = Math.min(12, Math.max(1, requestedCount))
-    const purposes = ['商品主视觉', '使用场景', '核心细节', '竖版海报', '卖点展示', '尺寸信息', '包装清单', '对比展示']
-    let next = createPlan(plan.mode, count, (index) => `${plan.mode}-auto-${Date.now()}-${index}`)
-    next = { ...next, images: next.images.map((image, index) => ({ ...image, purpose: purposes[index % purposes.length], goal: description, aspectRatio: purposes[index % purposes.length] === '竖版海报' ? '9:16' : '1:1' })) }
-    onChange(next)
+    onChange(createLocalImagePlan({ mode: plan.mode, count, description, createId: (index) => `${plan.mode}-auto-${Date.now()}-${index}` }))
   }
   const reconstruct = () => {
     const count = Math.min(12, Math.max(1, referenceCount))
-    let next = createPlan(plan.mode, count, (index) => `${plan.mode}-rebuild-${Date.now()}-${index}`)
-    next = { ...next, images: next.images.map((image, index) => ({ ...image, purpose: `参考图 ${index + 1} 对应新图`, goal: `${reconstructionIntensity}：保留营销目的，不复制原图；允许重新设计背景、人物、道具和构图。${description}`, perImageRequirements: '保持商品真实特征，重新生成文案，不复制第三方品牌、固定版式或人物姿势。' })) }
-    onChange(next)
+    onChange(createLocalImagePlan({ mode: plan.mode, count, description, reconstructionIntensity, referenceCount, createId: (index) => `${plan.mode}-rebuild-${Date.now()}-${index}` }))
   }
   return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
     <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-bold">逐图方案 · {plan.images.length} 张</div><div className="text-xs text-gray-500">每张图可以独立设置用途、比例、文案和要求。</div></div><div className="flex flex-wrap gap-2"><button onClick={autoPlan} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white">按描述生成方案</button>{referenceCount > 0 ? <><select value={reconstructionIntensity} onChange={(e) => setReconstructionIntensity(e.target.value)} className="rounded-lg border px-2 text-xs"><option>轻度重构</option><option>标准重构</option><option>深度原创</option></select><button onClick={reconstruct} className="rounded-lg bg-purple-600 px-3 py-2 text-xs text-white">按 {referenceCount} 张参考图重构</button></> : null}<button disabled={plan.images.length >= 12} onClick={() => onChange(addPlannedImage(plan, newId))} className="rounded-lg bg-gray-900 px-3 py-2 text-xs text-white">新增图片</button><button onClick={() => onChange(confirmImageSetPlan(plan))} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white">确认整套方案</button></div></div>
