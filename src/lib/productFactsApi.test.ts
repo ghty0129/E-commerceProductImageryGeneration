@@ -33,9 +33,12 @@ describe('product facts assistant API', () => {
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
 
     const card = await callProductFactsAnalysisApi({ profile, description: 'Polyester foldable travel bag.' })
+    const request = JSON.parse(String((fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body))
 
     expect(card.confirmedFacts[0]?.value).toBe('Polyester')
     expect(card.inferences[0]).toMatchObject({ id: 'waterproof', confirmed: false })
+    expect(request.messages[0].content).toContain('Simplified Chinese')
+    expect(request.messages[1].content).toContain('统一使用简体中文')
   })
 
   it('sends only confirmed facts when generating product copy', async () => {

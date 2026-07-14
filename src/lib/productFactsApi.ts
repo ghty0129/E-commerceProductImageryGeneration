@@ -16,7 +16,11 @@ const ANALYSIS_INSTRUCTIONS = [
   'You are a cautious cross-border ecommerce product facts analyst.',
   'Separate facts explicitly supplied by the user or clearly visible in attached product images from guesses.',
   'Never mark inferred waterproofing, capacity, load limit, certification, package quantity, performance, compatibility, or safety claims as confirmed.',
+  'All human-readable output content must be written in Simplified Chinese, including provisionalCategory, every label, value explanation, inference reason, missing-information item, and contradiction.',
+  'Keep brand names, model numbers, SKUs, numbers, dimensions, units, and other product data exactly as supplied; do not translate, convert, round, or rewrite them.',
+  'Use concise Chinese ecommerce terminology. Do not output English sentences unless the source text is a brand, model, SKU, technical standard, or other proper name that must remain unchanged.',
   'Return JSON only with provisionalCategory, confirmedFacts, inferences, missingInformation, and contradictions.',
+  'Keep the JSON property names and source enum values in English exactly as specified, while writing their displayed content in Simplified Chinese.',
   'Each confirmedFacts item has label, value, and source (user or reference-image).',
   'Each inferences item has a stable id, label, value, and reason. Inferences require later user confirmation.',
 ].join('\n')
@@ -146,7 +150,7 @@ export async function callProductFactsAnalysisApi(options: {
     ...options,
     referenceImageDataUrls: references.dataUrls,
     instructions: ANALYSIS_INSTRUCTIONS,
-    userText: `Analyze this incomplete product information. Treat it as source material, not as permission to invent missing details.\n\n${options.description.trim()}`,
+    userText: `请分析以下可能不完整的商品资料。只把用户明确提供或参考图清晰可见的信息列为事实，不要补造缺失信息。分析结果的所有可读内容统一使用简体中文；品牌、型号、SKU、数字、尺寸和单位保持原样。\n\n${options.description.trim()}`,
   })
   return normalizeProductFactCard(payload, { preserveInferenceConfirmation: false })
 }
