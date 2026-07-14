@@ -3,6 +3,7 @@ import AmazonPlanner from './AmazonPlanner'
 import ProductFactsAssistantModal from './ProductFactsAssistantModal'
 import PromptStructurePreview from './PromptStructurePreview'
 import FlexiblePlanEditor from './FlexiblePlanEditor'
+import SharedReferenceImages from './SharedReferenceImages'
 import { useStore } from '../store'
 import { getAmazonPlannerProfile, validateApiProfile } from '../lib/apiProfiles'
 import { CREATION_MODES, getCreationModePolicy, type CreationMode } from '../lib/creationModes'
@@ -109,6 +110,8 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
         <div><h2 className="text-lg font-bold text-gray-900 dark:text-white">{mode === 'free' ? '自由创作工作台' : '平台通用工作台'}</h2><p className="mt-1 text-xs text-gray-500">整套要求会进入结构化提示词，并按模式独立保存。</p></div>
         <button type="button" onClick={onOpenFacts} className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-500">商品资料助手</button>
       </div>
+
+      <SharedReferenceImages />
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
         <div className="space-y-4">
