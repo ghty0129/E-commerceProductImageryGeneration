@@ -49,6 +49,39 @@ export interface CompiledImagePrompt {
   canSubmit: boolean
 }
 
+const REVIEW_LABELS: Record<PromptSectionKind, string> = {
+  'mode-rules': '创作模式与规则',
+  'global-requirements': '整套用户要求',
+  'per-image-requirements': '当前图片额外要求',
+  'product-facts': '已确认商品事实',
+  'image-goal': '当前图片目标与方案',
+  'composition-copy': '构图与图片文案',
+  'visual-style': '视觉风格',
+  'series-consistency': '整套一致性',
+  technical: '技术输出要求',
+  negative: '禁止项',
+}
+
+const REVIEW_REPLACEMENTS: Array<[string, string]> = [
+  ['User requirements override conflicting default visual style guidance, series styling, and negative-prompt preferences, but never override mode hard rules or confirmed product facts.', '用户要求优先于默认视觉风格、套图风格和负面提示偏好，但不能覆盖当前模式的硬性规则或已确认商品事实。'],
+  ['Treat every confirmed product fact as authoritative. Do not change, contradict, or visually reinterpret these facts.', '所有已确认商品事实均为权威依据，不得修改、冲突或通过画面重新解释这些事实。'],
+  ['Apply this default guidance only where it does not conflict with higher-priority mode rules, user requirements, or confirmed product facts.', '仅在不与更高优先级的模式规则、用户要求或已确认商品事实冲突时应用此默认指导。'],
+  ['Apply this section only where it does not conflict with higher-priority user requirements.', '仅在不与更高优先级用户要求冲突时应用本部分。'],
+]
+
+function reviewContent(content: string) {
+  return REVIEW_REPLACEMENTS.reduce((result, [english, chinese]) => result.split(english).join(chinese), content)
+    .replace(/^Selected creation mode: (.+)\.$/m, '当前创作模式：$1。')
+}
+
+export function buildChinesePromptReview(compiled: CompiledImagePrompt) {
+  return compiled.sections.map((section) => [
+    `## ${REVIEW_LABELS[section.kind]}`,
+    `来源：${section.source}。优先级：${section.priority}。`,
+    reviewContent(section.content),
+  ].join('\n')).join('\n\n')
+}
+
 const WATERMARK_PATTERN = /(?:watermark|水印)/i
 const OWNED_ASSET_PATTERN = /(?:watermark|logo|brand mark|水印|标志|徽标|品牌标识)/i
 const AMAZON_PRICE_PATTERN = /(?:price|pricing|discount|coupon|sale price|\d+(?:\.\d+)?\s*%\s*off|[$€£¥￥]\s*\d+(?:\.\d+)?|价格|售价|到手价|折扣|优惠券|促销价)/i

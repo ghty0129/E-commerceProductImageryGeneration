@@ -10,7 +10,8 @@ import { CREATION_MODES, getCreationModePolicy, type CreationMode } from '../lib
 import { createEmptyCreationWorkspace, loadCreationWorkspace, saveCreationWorkspace, type CreationWorkspace } from '../lib/creationWorkspace'
 import { loadProductFactsWorkspace } from '../lib/productFactsWorkspace'
 import { buildConfirmedProductFactsText, type ProductFactCard } from '../lib/productFacts'
-import { compileImagePrompt, type CompiledImagePrompt } from '../lib/promptCompiler'
+import { buildChinesePromptReview, compileImagePrompt, type CompiledImagePrompt } from '../lib/promptCompiler'
+import { callPromptEnglishTranslationApi } from '../lib/productFactsApi'
 import {
   createEmptyPromptRequirementWorkspace,
   loadPromptRequirementWorkspace,
@@ -90,7 +91,7 @@ function ModeRules({ mode }: { mode: CreationMode }) {
   )
 }
 
-export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected, referenceCount }: {
+export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onOpenFacts, factCard, globalRequirements, onGlobalRequirementsChange, compiledPrompt, flexiblePlan, onFlexiblePlanChange, onApplySelected, referenceCount, applyingPrompt }: {
   mode: 'universal' | 'free'
   workspace: CreationWorkspace
   setWorkspace: React.Dispatch<React.SetStateAction<CreationWorkspace>>
@@ -101,8 +102,9 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
   compiledPrompt: CompiledImagePrompt
   flexiblePlan?: ImageSetPlan
   onFlexiblePlanChange?: (plan: ImageSetPlan) => void
-  onApplySelected?: () => void
+  onApplySelected?: () => void | Promise<void>
   referenceCount?: number
+  applyingPrompt?: boolean
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950 sm:p-5">
@@ -135,9 +137,9 @@ export function CreationModeFoundationPanel({ mode, workspace, setWorkspace, onO
             </div>
           )}
         </div>
-        <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} /></div>
+        <div className="space-y-4"><ModeRules mode={mode} /><PromptStructurePreview compiled={compiledPrompt} chineseReview={buildChinesePromptReview(compiledPrompt)} /></div>
       </div>
-      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} referenceCount={referenceCount} /> : null}
+      {flexiblePlan && onFlexiblePlanChange ? <FlexiblePlanEditor plan={flexiblePlan} onChange={onFlexiblePlanChange} requestedCount={workspace[mode].imageCount} description={globalRequirements} onApplySelected={onApplySelected} referenceCount={referenceCount} applying={applyingPrompt} /> : null}
     </section>
   )
 }
@@ -147,6 +149,7 @@ export default function CommerceWorkspace() {
   const [promptRequirements, setPromptRequirements] = useState<PromptRequirementWorkspace>(loadInitialPromptRequirements)
   const [flexiblePlans, setFlexiblePlans] = useState<FlexiblePlanWorkspace>(() => typeof window === 'undefined' ? createEmptyFlexiblePlanWorkspace() : loadFlexiblePlanWorkspace(window.localStorage))
   const [showProductFactsAssistant, setShowProductFactsAssistant] = useState(false)
+  const [translatingPrompt, setTranslatingPrompt] = useState(false)
   const [factCard, setFactCard] = useState<ProductFactCard | null>(loadFactCard)
   const settings = useStore((state) => state.settings)
   const inputImages = useStore((state) => state.inputImages)
@@ -166,20 +169,42 @@ export default function CommerceWorkspace() {
     const plan = flexiblePlans[genericMode]
     const selected = plan.images.find((image) => image.id === plan.selectedImageId) ?? plan.images[0]
     const composition = genericMode === 'universal'
-      ? [`Target platform: ${workspace.universal.platform || 'Not specified'}.`, workspace.universal.platformNotes].filter(Boolean).join('\n')
-      : [`Allow on-image text: ${workspace.free.allowText ? 'yes' : 'no'}.`, `Allow owned logo: ${workspace.free.allowOwnedLogo ? 'yes' : 'no'}.`, `Allow owned watermark: ${workspace.free.allowWatermark ? 'yes' : 'no'}.`].join('\n')
+      ? [`目标平台：${workspace.universal.platform || '未指定'}。`, workspace.universal.platformNotes].filter(Boolean).join('\n')
+      : [`允许图片文字：${workspace.free.allowText ? '是' : '否'}。`, `允许使用自有 Logo：${workspace.free.allowOwnedLogo ? '是' : '否'}。`, `允许使用自有水印：${workspace.free.allowWatermark ? '是' : '否'}。`].join('\n')
     return compileImagePrompt({
       mode: genericMode,
       globalRequirements: promptRequirements[genericMode].globalRequirements,
       perImageRequirements: selected?.perImageRequirements,
       confirmedProductFacts,
-      imageGoal: selected ? `${selected.purpose}\n${selected.goal}` : `Plan a coherent set of ${workspace[genericMode].imageCount} product images.`,
+      imageGoal: selected ? `${selected.purpose}\n${selected.goal}` : `策划一套包含 ${workspace[genericMode].imageCount} 张图片且风格连贯的商品套图。`,
       compositionAndCopy: [composition, selected?.composition, selected?.evidence, selected?.copy].filter(Boolean).join('\n'),
       visualStyle: selected?.styleOverride,
       seriesConsistency: plan.seriesStyle,
-      technicalRequirements: selected ? `${selected.aspectRatio}; ${selected.resolution}px long edge; ${selected.outputFormat}.` : 'Use the selected image settings.',
+      technicalRequirements: selected ? `画面比例 ${selected.aspectRatio}；长边 ${selected.resolution}px；输出格式 ${selected.outputFormat}。` : '使用当前选择的图片设置。',
     })
   }, [confirmedProductFacts, flexiblePlans, genericMode, promptRequirements, workspace])
+
+  const applyCurrentPrompt = async () => {
+    if (!currentGenericPrompt.canSubmit) {
+      showToast('中文提示词中存在阻止生成的问题，请先处理', 'error')
+      return
+    }
+    if (!profile || profileError) {
+      showToast(profileError || '请先配置 AI 策划接口', 'error')
+      setShowSettings(true, 'api')
+      return
+    }
+    setTranslatingPrompt(true)
+    try {
+      const englishPrompt = await callPromptEnglishTranslationApi({ profile, chinesePrompt: buildChinesePromptReview(currentGenericPrompt) })
+      setPrompt(englishPrompt)
+      showToast('英文提示词已填入生图栏', 'success')
+    } catch (reason) {
+      showToast(`英文提示词生成失败：${reason instanceof Error ? reason.message : String(reason)}`, 'error')
+    } finally {
+      setTranslatingPrompt(false)
+    }
+  }
 
   return (
     <>
@@ -203,7 +228,8 @@ export default function CommerceWorkspace() {
           compiledPrompt={currentGenericPrompt}
           flexiblePlan={flexiblePlans[workspace.activeMode]}
           onFlexiblePlanChange={(plan) => setFlexiblePlans((current) => ({ ...current, [workspace.activeMode]: plan }))}
-          onApplySelected={() => { setPrompt(currentGenericPrompt.finalPrompt); showToast('已把当前图片方案填入生图栏', 'success') }}
+          onApplySelected={applyCurrentPrompt}
+          applyingPrompt={translatingPrompt}
           referenceCount={inputImages.length} />
       )}
       {showProductFactsAssistant ? <ProductFactsAssistantModal profile={profile} profileError={profileError} referenceImageDataUrls={inputImages.map((image) => image.dataUrl)} showAmazonApply={false} onApplyAmazonCopy={() => undefined}

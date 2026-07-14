@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ApiProfile } from '../types'
-import { callProductCopyApi, callProductFactsAnalysisApi } from './productFactsApi'
+import { callProductCopyApi, callProductFactsAnalysisApi, callPromptEnglishTranslationApi } from './productFactsApi'
 import { normalizeProductFactCard } from './productFacts'
 
 const profile: ApiProfile = {
@@ -65,5 +65,19 @@ describe('product facts assistant API', () => {
     expect(userText).not.toContain('Waterproof')
     expect(copy.amazonTitle).toBe('Foldable Polyester Travel Bag')
     expect(copy.amazonBullets).toHaveLength(5)
+  })
+
+  it('translates the reviewed prompt to English without changing protected product data', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ englishPrompt: 'Use model AB-12 at 45 × 32 cm. Add the owned Logo.' }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await callPromptEnglishTranslationApi({ profile, chinesePrompt: '使用型号 AB-12，尺寸 45 × 32 cm，加入自有 Logo。' })
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+
+    expect(result).toContain('AB-12')
+    expect(result).toContain('45 × 32 cm')
+    expect(request.messages[0].content).toContain('Do not add, remove, soften, summarize')
   })
 })

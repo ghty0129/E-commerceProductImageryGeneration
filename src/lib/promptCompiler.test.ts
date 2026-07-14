@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileImagePrompt, diagnosePromptConflicts } from './promptCompiler'
+import { buildChinesePromptReview, compileImagePrompt, diagnosePromptConflicts } from './promptCompiler'
 import { buildAmazonPlanPrompt, buildAmazonPromptParts } from './listingPlanner'
 
 describe('prompt compiler', () => {
@@ -38,6 +38,23 @@ describe('prompt compiler', () => {
     const style = result.sections.find((section) => section.kind === 'visual-style')
     expect(facts?.priority).toBeLessThan(style?.priority ?? 0)
     expect(facts?.content).toContain('Black')
+  })
+
+  it('builds a Chinese review prompt without changing the compiled generation prompt', () => {
+    const compiled = compileImagePrompt({
+      mode: 'free',
+      globalRequirements: '右下角加入自有水印',
+      imageGoal: '展示商品主视觉',
+      technicalRequirements: '画面比例 1:1；长边 2048px。',
+    })
+
+    const review = buildChinesePromptReview(compiled)
+
+    expect(review).toContain('## 创作模式与规则')
+    expect(review).toContain('## 整套用户要求')
+    expect(review).toContain('来源：当前项目。优先级：2。')
+    expect(review).toContain('用户要求优先于默认视觉风格')
+    expect(review).toContain('右下角加入自有水印')
   })
 
   it('preserves existing Amazon plan, style, series, density, guard, and negative content', () => {

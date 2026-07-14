@@ -175,3 +175,27 @@ export async function callProductCopyApi(options: {
   }
   return copy
 }
+
+export async function callPromptEnglishTranslationApi(options: {
+  profile: ApiProfile
+  chinesePrompt: string
+  signal?: AbortSignal
+}) {
+  const payload = await callStructuredTextApi({
+    profile: options.profile,
+    instructions: [
+      'You are a precise ecommerce image-generation prompt translator.',
+      'Translate the complete Chinese review prompt into natural, unambiguous English for an image-generation model.',
+      'Preserve every heading, priority, requirement, negative constraint, and distinction between images.',
+      'Keep brand names, model numbers, SKUs, numbers, dimensions, units, quoted on-image copy, Logo, and watermark requirements exact.',
+      'Do not add, remove, soften, summarize, or reinterpret any instruction.',
+      'Return JSON only with one string property: englishPrompt.',
+    ].join('\n'),
+    userText: options.chinesePrompt,
+    signal: options.signal,
+  })
+  const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {}
+  const englishPrompt = cleanText(record.englishPrompt)
+  if (!englishPrompt) throw new Error('AI 未返回可用的英文生图提示词')
+  return englishPrompt
+}
